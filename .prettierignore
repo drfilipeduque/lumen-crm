@@ -1,0 +1,8 @@
+node_modules
+dist
+build
+.next
+.vite
+pnpm-lock.yaml
+coverage
+packages/database/src/generated

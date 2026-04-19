@@ -1,0 +1,664 @@
+// Lumen CRM — Prisma schema
+// CRM para clínicas estéticas brasileiras (gestão de leads via WhatsApp)
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================================
+// ENUMS
+// ============================================================
+
+enum UserRole {
+  ADMIN
+  COMMERCIAL
+  RECEPTION
+}
+
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum HistoryAction {
+  CREATED
+  STAGE_CHANGE
+  FIELD_UPDATE
+  TAG_ADDED
+  TAG_REMOVED
+  OWNER_CHANGED
+  VALUE_CHANGED
+  PRIORITY_CHANGED
+  CLOSED_WON
+  CLOSED_LOST
+  REOPENED
+}
+
+enum CustomFieldType {
+  TEXT
+  LONG_TEXT
+  NUMBER
+  CURRENCY
+  DATE
+  SELECT
+  MULTI_SELECT
+  BOOLEAN
+  URL
+}
+
+enum WhatsAppConnectionType {
+  OFFICIAL
+  UNOFFICIAL
+}
+
+enum WhatsAppConnectionStatus {
+  CONNECTED
+  DISCONNECTED
+  WAITING_QR
+  ERROR
+}
+
+enum EntryRuleMode {
+  AUTO
+  MANUAL
+}
+
+enum ConversationStatus {
+  OPEN
+  RESOLVED
+}
+
+enum MessageType {
+  TEXT
+  IMAGE
+  AUDIO
+  DOCUMENT
+  VIDEO
+}
+
+enum MessageStatus {
+  SENT
+  DELIVERED
+  READ
+  FAILED
+}
+
+enum TemplateCategory {
+  MARKETING
+  UTILITY
+  AUTHENTICATION
+}
+
+enum TemplateStatus {
+  APPROVED
+  PENDING
+  REJECTED
+}
+
+enum CadenceScope {
+  PIPELINE
+  STAGE
+  OPPORTUNITY
+  CONTACT
+  GROUP
+}
+
+enum CadenceExecutionStatus {
+  ACTIVE
+  PAUSED
+  COMPLETED
+  CANCELLED
+}
+
+enum WebhookType {
+  OUTBOUND
+  INBOUND
+}
+
+enum AutomationLogType {
+  AUTOMATION
+  CADENCE
+  WEBHOOK
+}
+
+enum AutomationLogStatus {
+  SUCCESS
+  FAILED
+}
+
+// ============================================================
+// USERS & AUTH
+// ============================================================
+
+model User {
+  id          String    @id @default(cuid())
+  name        String
+  email       String    @unique
+  password    String
+  role        UserRole  @default(COMMERCIAL)
+  avatar      String?
+  phone       String?
+  active      Boolean   @default(true)
+  lastLogin   DateTime?
+  preferences Json?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  ownedContacts        Contact[]                @relation("ContactOwner")
+  ownedOpportunities   Opportunity[]            @relation("OpportunityOwner")
+  history              OpportunityHistory[]
+  reminders            Reminder[]
+  files                File[]
+  conversations        Conversation[]           @relation("ConversationAssignee")
+  whatsappConnections  UserWhatsAppConnection[]
+  sessions             Session[]
+
+  @@index([role])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  userId       String
+  refreshToken String   @unique
+  expiresAt    DateTime
+  userAgent    String?
+  ipAddress    String?
+  createdAt    DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+// ============================================================
+// CONTACTS
+// ============================================================
+
+model Contact {
+  id        String    @id @default(cuid())
+  name      String
+  phone     String    @unique
+  email     String?
+  birthDate DateTime?
+  cpf       String?
+  address   Json?
+  notes     String?
+
+  ownerId String?
+  owner   User?   @relation("ContactOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  opportunities Opportunity[]
+  conversations Conversation[]
+
+  @@index([ownerId])
+  @@index([name])
+}
+
+// ============================================================
+// PIPELINE / FUNIL
+// ============================================================
+
+model Pipeline {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  active      Boolean  @default(true)
+  order       Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  stages         Stage[]
+  opportunities  Opportunity[]
+  customFields   PipelineCustomField[]
+  entryRules     ConnectionEntryRule[]
+
+  @@index([order])
+}
+
+model Stage {
+  id           String  @id @default(cuid())
+  pipelineId   String
+  name         String
+  color        String  @default("#94a3b8")
+  order        Int     @default(0)
+  isClosedWon  Boolean @default(false)
+  isClosedLost Boolean @default(false)
+
+  pipeline       Pipeline              @relation(fields: [pipelineId], references: [id], onDelete: Cascade)
+  opportunities  Opportunity[]
+  historyFrom    OpportunityHistory[]  @relation("HistoryFromStage")
+  historyTo      OpportunityHistory[]  @relation("HistoryToStage")
+  entryRules     ConnectionEntryRule[]
+
+  @@index([pipelineId, order])
+}
+
+// ============================================================
+// OPPORTUNITIES
+// ============================================================
+
+model Opportunity {
+  id          String    @id @default(cuid())
+  title       String
+  value       Decimal   @default(0) @db.Decimal(12, 2)
+  priority    Priority  @default(MEDIUM)
+  description String?
+  dueDate     DateTime?
+
+  pipelineId String
+  stageId    String
+  contactId  String
+  ownerId    String?
+
+  pipeline Pipeline @relation(fields: [pipelineId], references: [id], onDelete: Restrict)
+  stage    Stage    @relation(fields: [stageId], references: [id], onDelete: Restrict)
+  contact  Contact  @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  owner    User?    @relation("OpportunityOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tags              Tag[]                @relation("OpportunityTags")
+  customFieldValues CustomFieldValue[]
+  reminders         Reminder[]
+  files             File[]
+  history           OpportunityHistory[]
+  cadenceExecutions CadenceExecution[]
+
+  @@index([pipelineId])
+  @@index([stageId])
+  @@index([contactId])
+  @@index([ownerId])
+  @@index([dueDate])
+  @@index([createdAt])
+}
+
+model OpportunityHistory {
+  id            String        @id @default(cuid())
+  opportunityId String
+  fromStageId   String?
+  toStageId     String?
+  userId        String?
+  action        HistoryAction
+  metadata      Json?
+  createdAt     DateTime      @default(now())
+
+  opportunity Opportunity @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+  fromStage   Stage?      @relation("HistoryFromStage", fields: [fromStageId], references: [id], onDelete: SetNull)
+  toStage     Stage?      @relation("HistoryToStage", fields: [toStageId], references: [id], onDelete: SetNull)
+  user        User?       @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([opportunityId, createdAt])
+  @@index([action])
+  @@index([userId])
+  @@index([createdAt])
+}
+
+model Tag {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  color     String   @default("#64748b")
+  createdAt DateTime @default(now())
+
+  opportunities Opportunity[] @relation("OpportunityTags")
+}
+
+// ============================================================
+// CUSTOM FIELDS
+// ============================================================
+
+model CustomField {
+  id       String          @id @default(cuid())
+  name     String
+  type     CustomFieldType
+  options  Json?
+  required Boolean         @default(false)
+  active   Boolean         @default(true)
+  order    Int             @default(0)
+
+  values    CustomFieldValue[]
+  pipelines PipelineCustomField[]
+
+  @@index([active, order])
+}
+
+model CustomFieldValue {
+  id            String   @id @default(cuid())
+  customFieldId String
+  opportunityId String
+  value         String
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  customField CustomField @relation(fields: [customFieldId], references: [id], onDelete: Cascade)
+  opportunity Opportunity @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+
+  @@unique([customFieldId, opportunityId])
+  @@index([opportunityId])
+}
+
+model PipelineCustomField {
+  pipelineId    String
+  customFieldId String
+  visible       Boolean @default(true)
+  order         Int     @default(0)
+
+  pipeline    Pipeline    @relation(fields: [pipelineId], references: [id], onDelete: Cascade)
+  customField CustomField @relation(fields: [customFieldId], references: [id], onDelete: Cascade)
+
+  @@id([pipelineId, customFieldId])
+  @@index([pipelineId, order])
+}
+
+// ============================================================
+// REMINDERS & FILES
+// ============================================================
+
+model Reminder {
+  id            String    @id @default(cuid())
+  title         String
+  description   String?
+  dueAt         DateTime
+  completed     Boolean   @default(false)
+  completedAt   DateTime?
+  snoozedUntil  DateTime?
+  opportunityId String
+  userId        String
+
+  opportunity Opportunity @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([dueAt])
+  @@index([userId, completed])
+  @@index([opportunityId])
+}
+
+model File {
+  id            String   @id @default(cuid())
+  opportunityId String
+  userId        String
+  name          String
+  mimeType      String
+  size          Int
+  url           String
+  createdAt     DateTime @default(now())
+
+  opportunity Opportunity @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([opportunityId])
+}
+
+// ============================================================
+// WHATSAPP — CONNECTIONS / CONVERSATIONS / MESSAGES
+// ============================================================
+
+model WhatsAppConnection {
+  id     String                   @id @default(cuid())
+  name   String
+  type   WhatsAppConnectionType
+  phone  String?
+  status WhatsAppConnectionStatus @default(DISCONNECTED)
+  active Boolean                  @default(true)
+
+  // OFFICIAL
+  wabaId           String?
+  phoneNumberId    String?
+  accessToken      String?
+  qualityTier      String?
+  coexistenceMode  Boolean @default(false)
+
+  // UNOFFICIAL
+  sessionData String?
+  webhookUrl  String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users         UserWhatsAppConnection[]
+  entryRule     ConnectionEntryRule?
+  conversations Conversation[]
+  templates     Template[]
+  cadences      Cadence[]
+
+  @@index([status])
+  @@index([type])
+}
+
+model UserWhatsAppConnection {
+  userId       String
+  connectionId String
+
+  user       User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  connection WhatsAppConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+
+  @@id([userId, connectionId])
+  @@index([connectionId])
+}
+
+model ConnectionEntryRule {
+  id           String        @id @default(cuid())
+  connectionId String        @unique
+  mode         EntryRuleMode @default(MANUAL)
+  pipelineId   String
+  stageId      String
+
+  connection WhatsAppConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  pipeline   Pipeline           @relation(fields: [pipelineId], references: [id], onDelete: Restrict)
+  stage      Stage              @relation(fields: [stageId], references: [id], onDelete: Restrict)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Conversation {
+  id            String             @id @default(cuid())
+  contactId     String
+  connectionId  String
+  assigneeId    String?
+  status        ConversationStatus @default(OPEN)
+  lastMessageAt DateTime?
+  unreadCount   Int                @default(0)
+
+  contact    Contact            @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  connection WhatsAppConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  assignee   User?              @relation("ConversationAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+  messages   Message[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([contactId, connectionId])
+  @@index([status, lastMessageAt])
+  @@index([assigneeId])
+  @@index([connectionId])
+}
+
+model Message {
+  id             String        @id @default(cuid())
+  conversationId String
+  fromMe         Boolean
+  type           MessageType   @default(TEXT)
+  content        String?
+  mediaUrl       String?
+  mediaName      String?
+  mediaSize      Int?
+  status         MessageStatus @default(SENT)
+  externalId     String?
+  sentAt         DateTime?
+  deliveredAt    DateTime?
+  readAt         DateTime?
+  createdAt      DateTime      @default(now())
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId, createdAt])
+  @@index([externalId])
+  @@index([status])
+}
+
+// ============================================================
+// TEMPLATES & SCRIPTS
+// ============================================================
+
+model Template {
+  id           String           @id @default(cuid())
+  connectionId String
+  externalId   String?
+  name         String
+  category     TemplateCategory
+  language     String           @default("pt_BR")
+  status       TemplateStatus   @default(PENDING)
+  body         String
+  variables    Json?
+  header       Json?
+  footer       String?
+  buttons      Json?
+
+  connection WhatsAppConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([connectionId, status])
+}
+
+model ScriptFolder {
+  id    String @id @default(cuid())
+  name  String
+  order Int    @default(0)
+
+  scripts Script[]
+
+  @@index([order])
+}
+
+model Script {
+  id        String   @id @default(cuid())
+  name      String
+  folderId  String?
+  content   String
+  mediaType String?
+  mediaUrl  String?
+  variables Json?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  folder ScriptFolder? @relation(fields: [folderId], references: [id], onDelete: SetNull)
+
+  @@index([folderId])
+}
+
+// ============================================================
+// AUTOMATIONS, CADENCES & WEBHOOKS
+// ============================================================
+
+model Automation {
+  id              String    @id @default(cuid())
+  name            String
+  active          Boolean   @default(true)
+  triggerType     String
+  triggerConfig   Json
+  flow            Json
+  executionCount  Int       @default(0)
+  lastExecutedAt  DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([active, triggerType])
+}
+
+model Cadence {
+  id           String       @id @default(cuid())
+  name         String
+  active       Boolean      @default(true)
+  connectionId String
+  scope        CadenceScope
+  scopeConfig  Json
+  pauseOnReply Boolean      @default(true)
+  messages     Json
+
+  connection WhatsAppConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  executions CadenceExecution[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([active, scope])
+  @@index([connectionId])
+}
+
+model CadenceExecution {
+  id              String                 @id @default(cuid())
+  cadenceId       String
+  opportunityId   String
+  currentStep     Int                    @default(0)
+  status          CadenceExecutionStatus @default(ACTIVE)
+  nextExecutionAt DateTime?
+
+  cadence     Cadence     @relation(fields: [cadenceId], references: [id], onDelete: Cascade)
+  opportunity Opportunity @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([cadenceId])
+  @@index([opportunityId])
+  @@index([status, nextExecutionAt])
+}
+
+model Webhook {
+  id     String      @id @default(cuid())
+  type   WebhookType
+  name   String
+  active Boolean     @default(true)
+
+  // OUTBOUND
+  url             String?
+  method          String?
+  headers         Json?
+  events          String[]
+  payloadTemplate Json?
+
+  // INBOUND
+  uniqueUrl    String? @unique
+  authToken    String?
+  actionType   String?
+  actionConfig Json?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([type, active])
+}
+
+model AutomationLog {
+  id            String              @id @default(cuid())
+  type          AutomationLogType
+  entityId      String
+  status        AutomationLogStatus
+  trigger       String
+  input         Json?
+  output        Json?
+  error         String?
+  executionTime Int?
+  createdAt     DateTime            @default(now())
+
+  @@index([type, entityId])
+  @@index([createdAt])
+  @@index([status])
+}
