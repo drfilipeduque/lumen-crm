@@ -1,0 +1,146 @@
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { api } from '../lib/api';
+
+export type Priority = 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT';
+
+export type BoardCard = {
+  id: string;
+  title: string;
+  contactId: string;
+  contactName: string;
+  value: number;
+  priority: Priority;
+  description: string | null;
+  dueDate: string | null;
+  tagsCount: number;
+  tags: { id: string; name: string; color: string }[];
+  ownerId: string | null;
+  ownerName: string | null;
+  ownerAvatar: string | null;
+  lastActivity: string;
+  hasActiveReminder: boolean;
+  hasOverdueReminder: boolean;
+  unreadMessages: number;
+  order: number;
+  createdAt: string;
+};
+
+export type BoardColumn = {
+  stageId: string;
+  stageName: string;
+  color: string;
+  order: number;
+  isClosedWon: boolean;
+  isClosedLost: boolean;
+  count: number;
+  totalValue: number;
+  opportunities: BoardCard[];
+};
+
+export type BoardResponse = {
+  pipelineId: string;
+  pipelineName: string;
+  columns: BoardColumn[];
+};
+
+export type BoardFilters = {
+  search?: string;
+  tagIds?: string[];
+  ownerId?: string;
+  priority?: Priority;
+  dueFrom?: string;
+  dueTo?: string;
+};
+
+const boardKey = (pipelineId: string, filters: BoardFilters) =>
+  ['board', pipelineId, filters] as const;
+
+function toQuery(args: BoardFilters): string {
+  const p = new URLSearchParams();
+  if (args.search) p.set('search', args.search);
+  if (args.tagIds && args.tagIds.length > 0) p.set('tagIds', args.tagIds.join(','));
+  if (args.ownerId) p.set('ownerId', args.ownerId);
+  if (args.priority) p.set('priority', args.priority);
+  if (args.dueFrom) p.set('dueFrom', args.dueFrom);
+  if (args.dueTo) p.set('dueTo', args.dueTo);
+  return p.toString();
+}
+
+export function useBoard(pipelineId: string | null, filters: BoardFilters) {
+  return useQuery({
+    queryKey: pipelineId ? boardKey(pipelineId, filters) : ['board', 'none'],
+    queryFn: async () =>
+      (await api.get<BoardResponse>(`/pipelines/${pipelineId}/board?${toQuery(filters)}`)).data,
+    enabled: !!pipelineId,
+    placeholderData: keepPreviousData,
+    staleTime: 30_000,
+  });
+}
+
+export function buildBoardExportUrl(pipelineId: string, filters: BoardFilters): string {
+  return `/pipelines/${pipelineId}/opportunities/export?${toQuery(filters)}`;
+}
+
+// ---------- mutations ----------
+
+export type OpportunityInput = {
+  title: string;
+  contactId: string;
+  pipelineId: string;
+  stageId: string;
+  value: number;
+  priority: Priority;
+  description?: string | null;
+  dueDate?: string | null;
+  ownerId?: string | null;
+  tagIds?: string[];
+  customFields?: Record<string, string>;
+};
+
+function invalidateBoard(qc: ReturnType<typeof useQueryClient>) {
+  qc.invalidateQueries({ queryKey: ['board'] });
+}
+
+export function useCreateOpportunity() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: OpportunityInput) =>
+      (await api.post<BoardCard>('/opportunities', input)).data,
+    onSuccess: () => invalidateBoard(qc),
+  });
+}
+
+export function useUpdateOpportunity() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, ...patch }: { id: string } & Partial<Omit<OpportunityInput, 'pipelineId'>>) =>
+      (await api.put<BoardCard>(`/opportunities/${id}`, patch)).data,
+    onSuccess: () => invalidateBoard(qc),
+  });
+}
+
+export function useDeleteOpportunity() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => (await api.delete(`/opportunities/${id}`)).data,
+    onSuccess: () => invalidateBoard(qc),
+  });
+}
+
+export function useMoveOpportunity() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, toStageId, order }: { id: string; toStageId: string; order: number }) =>
+      (await api.put(`/opportunities/${id}/move`, { toStageId, order })).data,
+    onSettled: () => invalidateBoard(qc),
+  });
+}
+
+export function useReorderOpportunity() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, order }: { id: string; order: number }) =>
+      (await api.put(`/opportunities/${id}/reorder`, { order })).data,
+    onSettled: () => invalidateBoard(qc),
+  });
+}
