@@ -128,6 +128,82 @@ export const Icons = {
       <path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3M12 17h.01" />
     </svg>
   ),
+  // Tipos de campo personalizado
+  Type: ({ s = 16, c, ...rest }: IconProps) => (
+    <svg {...baseProps(s, c)} {...rest}>
+      <path d="M4 7V5h16v2M9 5v14M15 19h-6" />
+    </svg>
+  ),
+  AlignLeft: ({ s = 16, c, ...rest }: IconProps) => (
+    <svg {...baseProps(s, c)} {...rest}>
+      <path d="M4 6h16M4 12h12M4 18h16M4 24" />
+    </svg>
+  ),
+  Hash: ({ s = 16, c, ...rest }: IconProps) => (
+    <svg {...baseProps(s, c)} {...rest}>
+      <path d="M4 9h16M4 15h16M10 3 8 21M16 3l-2 18" />
+    </svg>
+  ),
+  DollarSign: ({ s = 16, c, ...rest }: IconProps) => (
+    <svg {...baseProps(s, c)} {...rest}>
+      <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
+    </svg>
+  ),
+  Calendar: ({ s = 16, c, ...rest }: IconProps) => (
+    <svg {...baseProps(s, c)} {...rest}>
+      <rect x="3" y="4" width="18" height="18" rx="2" />
+      <path d="M16 2v4M8 2v4M3 10h18" />
+    </svg>
+  ),
+  List: ({ s = 16, c, ...rest }: IconProps) => (
+    <svg {...baseProps(s, c)} {...rest}>
+      <path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01" />
+    </svg>
+  ),
+  ListChecks: ({ s = 16, c, ...rest }: IconProps) => (
+    <svg {...baseProps(s, c)} {...rest}>
+      <path d="M11 6h10M11 12h10M11 18h10M3 6l1.5 1.5L7 5M3 12l1.5 1.5L7 11M3 18l1.5 1.5L7 17" />
+    </svg>
+  ),
+  ToggleLeft: ({ s = 16, c, ...rest }: IconProps) => (
+    <svg {...baseProps(s, c)} {...rest}>
+      <rect x="2" y="6" width="20" height="12" rx="6" />
+      <circle cx="8" cy="12" r="3" />
+    </svg>
+  ),
+  Link: ({ s = 16, c, ...rest }: IconProps) => (
+    <svg {...baseProps(s, c)} {...rest}>
+      <path d="M10 13a5 5 0 0 0 7.07 0l3-3a5 5 0 0 0-7.07-7.07l-1.5 1.5" />
+      <path d="M14 11a5 5 0 0 0-7.07 0l-3 3a5 5 0 0 0 7.07 7.07l1.5-1.5" />
+    </svg>
+  ),
+  // Ações
+  Edit: ({ s = 16, c, ...rest }: IconProps) => (
+    <svg {...baseProps(s, c)} {...rest}>
+      <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+      <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5Z" />
+    </svg>
+  ),
+  Trash: ({ s = 16, c, ...rest }: IconProps) => (
+    <svg {...baseProps(s, c)} {...rest}>
+      <path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6M10 11v6M14 11v6" />
+    </svg>
+  ),
+  Grip: ({ s = 16, c, ...rest }: IconProps) => (
+    <svg {...baseProps(s, c)} {...rest}>
+      <circle cx="9" cy="6" r="1" />
+      <circle cx="9" cy="12" r="1" />
+      <circle cx="9" cy="18" r="1" />
+      <circle cx="15" cy="6" r="1" />
+      <circle cx="15" cy="12" r="1" />
+      <circle cx="15" cy="18" r="1" />
+    </svg>
+  ),
+  X: ({ s = 16, c, ...rest }: IconProps) => (
+    <svg {...baseProps(s, c)} {...rest}>
+      <path d="M18 6 6 18M6 6l12 12" />
+    </svg>
+  ),
 };
 
 export type IconName = keyof typeof Icons;
