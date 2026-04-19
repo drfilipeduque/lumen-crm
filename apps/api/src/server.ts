@@ -10,6 +10,7 @@ import { authRoutes } from './modules/auth/auth.routes.js';
 import { dashboardRoutes } from './modules/dashboard/dashboard.routes.js';
 import { tagsRoutes } from './modules/tags/tags.routes.js';
 import { customFieldsRoutes } from './modules/custom-fields/custom-fields.routes.js';
+import { pipelinesRoutes, stagesRoutes } from './modules/pipelines/pipelines.routes.js';
 
 const app = Fastify({
   logger: {
@@ -44,6 +45,8 @@ await app.register(authRoutes, { prefix: '/auth' });
 await app.register(dashboardRoutes, { prefix: '/dashboard' });
 await app.register(tagsRoutes, { prefix: '/tags' });
 await app.register(customFieldsRoutes, { prefix: '/custom-fields' });
+await app.register(pipelinesRoutes, { prefix: '/pipelines' });
+await app.register(stagesRoutes, { prefix: '/stages' });
 
 try {
   await app.listen({ host: env.API_HOST, port: env.API_PORT });
