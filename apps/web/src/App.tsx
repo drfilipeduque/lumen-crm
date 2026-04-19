@@ -5,6 +5,7 @@ import { AppShell } from './components/shell/AppShell';
 import { DashboardPage } from './pages/Dashboard';
 import { LoginPage } from './pages/Login';
 import { LeadsPage } from './pages/Leads';
+import { PipelinePage } from './pages/Pipeline';
 import { PagePlaceholder } from './pages/PagePlaceholder';
 import { SettingsLayout } from './pages/settings/SettingsLayout';
 import { SettingsSection } from './pages/settings/SettingsSection';
@@ -38,7 +39,7 @@ export function App() {
             >
               <Route index element={<Navigate to="/dashboard" replace />} />
               <Route path="/dashboard" element={<DashboardPage />} />
-              <Route path="/pipeline" element={<PagePlaceholder title="Pipeline" icon="Pipeline" />} />
+              <Route path="/pipeline" element={<PipelinePage />} />
               <Route path="/conversations" element={<PagePlaceholder title="Conversas" icon="Chat" />} />
               <Route path="/leads" element={<LeadsPage />} />
               <Route path="/reminders" element={<PagePlaceholder title="Lembretes" icon="Bell" />} />
