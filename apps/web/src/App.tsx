@@ -9,6 +9,7 @@ import { SettingsLayout } from './pages/settings/SettingsLayout';
 import { SettingsSection } from './pages/settings/SettingsSection';
 import { SettingsAccount } from './pages/settings/SettingsAccount';
 import { SettingsAppearance } from './pages/settings/SettingsAppearance';
+import { SettingsTags } from './pages/settings/SettingsTags';
 import { ProtectedRoute } from './components/ProtectedRoute';
 import { ThemeSync } from './components/ThemeSync';
 import { ToastViewport } from './components/ui/Toast';
@@ -82,10 +83,7 @@ export function App() {
                   path="tags"
                   element={
                     <ProtectedRoute roles={['ADMIN']}>
-                      <SettingsSection
-                        title="Tags"
-                        description="Categorize seus leads com etiquetas coloridas."
-                      />
+                      <SettingsTags />
                     </ProtectedRoute>
                   }
                 />
