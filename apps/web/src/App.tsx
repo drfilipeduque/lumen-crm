@@ -11,6 +11,7 @@ import { SettingsAccount } from './pages/settings/SettingsAccount';
 import { SettingsAppearance } from './pages/settings/SettingsAppearance';
 import { SettingsTags } from './pages/settings/SettingsTags';
 import { SettingsCustomFields } from './pages/settings/SettingsCustomFields';
+import { SettingsPipelines } from './pages/settings/SettingsPipelines';
 import { ProtectedRoute } from './components/ProtectedRoute';
 import { ThemeSync } from './components/ThemeSync';
 import { ToastViewport } from './components/ui/Toast';
@@ -62,10 +63,7 @@ export function App() {
                   path="pipelines"
                   element={
                     <ProtectedRoute roles={['ADMIN']}>
-                      <SettingsSection
-                        title="Pipelines"
-                        description="Configure os funis e suas etapas."
-                      />
+                      <SettingsPipelines />
                     </ProtectedRoute>
                   }
                 />
