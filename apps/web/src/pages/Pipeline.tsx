@@ -17,6 +17,8 @@ import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-
 import { CSS } from '@dnd-kit/utilities';
 import { useTheme } from '../lib/ThemeContext';
 import { Modal } from '../components/ui/Modal';
+import { ConfirmDialog } from '../components/ui/ConfirmDialog';
+import { TagPicker } from '../components/ui/TagPicker';
 import { toast } from '../components/ui/Toast';
 import { Icons, type IconName } from '../components/icons';
 import { FONT_STACK } from '../lib/theme';
@@ -29,8 +31,11 @@ import {
   buildBoardExportUrl,
   useBoard,
   useCreateOpportunity,
+  useDeleteOpportunity,
   useMoveOpportunity,
+  useOpportunity,
   useReorderOpportunity,
+  useUpdateOpportunity,
   type BoardCard,
   type BoardColumn,
   type BoardFilters,
@@ -73,6 +78,7 @@ export function PipelinePage() {
   const [dueFrom, setDueFrom] = useState('');
   const [dueTo, setDueTo] = useState('');
   const [creating, setCreating] = useState<{ stageId: string | null }>({ stageId: null });
+  const [editingId, setEditingId] = useState<string | null>(null);
 
   useEffect(() => {
     const id = setTimeout(() => setDebouncedSearch(search.trim()), 300);
@@ -185,18 +191,34 @@ export function PipelinePage() {
         <KanbanBoard
           data={board.data!}
           onAddInStage={(stageId) => setCreating({ stageId })}
+          onCardClick={(id) => setEditingId(id)}
         />
       ) : (
-        <ListView data={board.data!} />
+        <ListView data={board.data!} onRowClick={(id) => setEditingId(id)} />
       )}
 
-      {/* user info usado no modal de criação rápida (default owner) */}
+      {/* Criação rápida — abre com stageId pré-preenchida */}
       {creating.stageId && pipelineId && (
-        <QuickCreateModal
+        <OpportunityModal
           open={!!creating.stageId}
           onClose={() => setCreating({ stageId: null })}
           pipelineId={pipelineId}
           stageId={creating.stageId}
+          tags={tagsQ.data ?? []}
+          team={teamQ.data ?? []}
+          defaultOwnerId={me?.id ?? null}
+        />
+      )}
+
+      {/* Edição — abre ao clicar num card */}
+      {editingId && pipelineId && (
+        <OpportunityModal
+          key={editingId}
+          open
+          opportunityId={editingId}
+          onClose={() => setEditingId(null)}
+          pipelineId={pipelineId}
+          stageId={null}
           tags={tagsQ.data ?? []}
           team={teamQ.data ?? []}
           defaultOwnerId={me?.id ?? null}
@@ -740,9 +762,11 @@ function SelectPopover({
 function KanbanBoard({
   data,
   onAddInStage,
+  onCardClick,
 }: {
   data: { columns: BoardColumn[] };
   onAddInStage: (stageId: string) => void;
+  onCardClick: (id: string) => void;
 }) {
   const { tokens: t } = useTheme();
   const move = useMoveOpportunity();
@@ -934,6 +958,7 @@ function KanbanBoard({
                 setCollapsed(next);
               }}
               onAdd={() => onAddInStage(col.stageId)}
+              onCardClick={onCardClick}
             />
           ))}
         </div>
@@ -952,11 +977,13 @@ function KanbanColumn({
   collapsed,
   onToggleCollapse,
   onAdd,
+  onCardClick,
 }: {
   column: BoardColumn;
   collapsed: boolean;
   onToggleCollapse: () => void;
   onAdd: () => void;
+  onCardClick: (id: string) => void;
 }) {
   const { tokens: t } = useTheme();
   const { setNodeRef, isOver } = useDroppable({ id: column.stageId });
@@ -1064,7 +1091,9 @@ function KanbanColumn({
               </button>
             </div>
           ) : (
-            column.opportunities.map((card) => <SortableCard key={card.id} card={card} />)
+            column.opportunities.map((card) => (
+              <SortableCard key={card.id} card={card} onClick={() => onCardClick(card.id)} />
+            ))
           )}
         </div>
       </SortableContext>
@@ -1237,7 +1266,7 @@ function MenuItem({ label, onClick }: { label: string; onClick: () => void }) {
 // CARD
 // ============================================================
 
-function SortableCard({ card }: { card: BoardCard }) {
+function SortableCard({ card, onClick }: { card: BoardCard; onClick: () => void }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: card.id,
   });
@@ -1248,12 +1277,20 @@ function SortableCard({ card }: { card: BoardCard }) {
   };
   return (
     <div ref={setNodeRef} style={style} {...attributes} {...listeners}>
-      <OpportunityCard card={card} />
+      <OpportunityCard card={card} onClick={onClick} />
     </div>
   );
 }
 
-function OpportunityCard({ card, dragging }: { card: BoardCard; dragging?: boolean }) {
+function OpportunityCard({
+  card,
+  dragging,
+  onClick,
+}: {
+  card: BoardCard;
+  dragging?: boolean;
+  onClick?: () => void;
+}) {
   const { tokens: t } = useTheme();
   const [hover, setHover] = useState(false);
   const [reminderOpen, setReminderOpen] = useState(false);
@@ -1264,6 +1301,7 @@ function OpportunityCard({ card, dragging }: { card: BoardCard; dragging?: boole
 
   return (
     <div
+      onClick={onClick}
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
       style={{
@@ -1280,7 +1318,7 @@ function OpportunityCard({ card, dragging }: { card: BoardCard; dragging?: boole
             : 'none',
         transform: hover && !dragging ? 'translateY(-1px)' : undefined,
         transition: 'transform 120ms ease, box-shadow 120ms ease',
-        cursor: 'grab',
+        cursor: dragging ? 'grabbing' : 'pointer',
       }}
     >
       <div
@@ -1509,7 +1547,13 @@ function ReminderQuickModal({
 // LIST VIEW
 // ============================================================
 
-function ListView({ data }: { data: { columns: BoardColumn[] } }) {
+function ListView({
+  data,
+  onRowClick,
+}: {
+  data: { columns: BoardColumn[] };
+  onRowClick: (id: string) => void;
+}) {
   const { tokens: t } = useTheme();
   const all = useMemo(() => {
     const flat: (BoardCard & { stageName: string; stageColor: string })[] = [];
@@ -1541,7 +1585,7 @@ function ListView({ data }: { data: { columns: BoardColumn[] } }) {
           <Cell>Último contato</Cell>
         </Row>
         {all.map((o) => (
-          <Row key={o.id} t={t} onClick={() => toast('Detalhes da oportunidade virão na proxima fase', 'info')}>
+          <Row key={o.id} t={t} onClick={() => onRowClick(o.id)}>
             <Cell>{o.title}</Cell>
             <Cell>{o.contactName}</Cell>
             <Cell>
@@ -1645,9 +1689,10 @@ function Cell({ align, children }: { align?: 'right'; children: React.ReactNode 
 // QUICK CREATE MODAL
 // ============================================================
 
-function QuickCreateModal({
+function OpportunityModal({
   open,
   onClose,
+  opportunityId,
   pipelineId,
   stageId,
   tags,
@@ -1656,14 +1701,19 @@ function QuickCreateModal({
 }: {
   open: boolean;
   onClose: () => void;
+  opportunityId?: string | null;
   pipelineId: string;
-  stageId: string;
+  stageId: string | null;
   tags: Tag[];
   team: TeamMember[];
   defaultOwnerId: string | null;
 }) {
   const { tokens: t } = useTheme();
+  const isEdit = !!opportunityId;
+  const detail = useOpportunity(opportunityId ?? null);
   const create = useCreateOpportunity();
+  const update = useUpdateOpportunity();
+  const remove = useDeleteOpportunity();
 
   const [title, setTitle] = useState('');
   const [contactQuery, setContactQuery] = useState('');
@@ -1677,22 +1727,37 @@ function QuickCreateModal({
   const [error, setError] = useState<string | null>(null);
   const [contacts, setContacts] = useState<{ id: string; name: string; phone: string }[]>([]);
   const [contactDropdownOpen, setContactDropdownOpen] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const contactRef = useRef<HTMLDivElement>(null);
   useClickOutside(contactRef, () => setContactDropdownOpen(false), contactDropdownOpen);
 
   useEffect(() => {
     if (!open) return;
-    setTitle('');
-    setContactQuery('');
-    setContactId(null);
-    setContactName('');
-    setValueStr('');
-    setPriority('MEDIUM');
-    setDueDate('');
-    setOwnerId(defaultOwnerId ?? '');
-    setTagIds([]);
-    setError(null);
-  }, [open, defaultOwnerId]);
+    if (isEdit && detail.data) {
+      const d = detail.data;
+      setTitle(d.title);
+      setContactId(d.contactId);
+      setContactName(d.contactName);
+      setContactQuery('');
+      setValueStr(d.value > 0 ? String(d.value).replace('.', ',') : '');
+      setPriority(d.priority as Priority);
+      setDueDate(d.dueDate ? d.dueDate.slice(0, 10) : '');
+      setOwnerId(d.ownerId ?? '');
+      setTagIds(d.tags.map((tg) => tg.id));
+      setError(null);
+    } else if (!isEdit) {
+      setTitle('');
+      setContactQuery('');
+      setContactId(null);
+      setContactName('');
+      setValueStr('');
+      setPriority('MEDIUM');
+      setDueDate('');
+      setOwnerId(defaultOwnerId ?? '');
+      setTagIds([]);
+      setError(null);
+    }
+  }, [open, defaultOwnerId, isEdit, detail.data?.id, detail.data?.updatedAt]);
 
   // Busca contatos com debounce
   useEffect(() => {
@@ -1719,26 +1784,58 @@ function QuickCreateModal({
     if (!Number.isFinite(valueNum) || valueNum < 0) return setError('Valor inválido');
 
     try {
-      await create.mutateAsync({
-        title: title.trim(),
-        contactId,
-        pipelineId,
-        stageId,
-        value: valueNum || 0,
-        priority,
-        dueDate: dueDate || null,
-        ownerId: ownerId || null,
-        tagIds: tagIds.length > 0 ? tagIds : undefined,
-      });
-      toast('Oportunidade criada', 'success');
+      if (isEdit && opportunityId) {
+        await update.mutateAsync({
+          id: opportunityId,
+          title: title.trim(),
+          contactId,
+          value: valueNum || 0,
+          priority,
+          dueDate: dueDate || null,
+          ownerId: ownerId || null,
+          tagIds,
+        });
+        toast('Oportunidade atualizada', 'success');
+      } else {
+        if (!stageId) return setError('Etapa não definida');
+        await create.mutateAsync({
+          title: title.trim(),
+          contactId,
+          pipelineId,
+          stageId,
+          value: valueNum || 0,
+          priority,
+          dueDate: dueDate || null,
+          ownerId: ownerId || null,
+          tagIds: tagIds.length > 0 ? tagIds : undefined,
+        });
+        toast('Oportunidade criada', 'success');
+      }
       onClose();
     } catch (e) {
-      setError(axiosMsg(e) || 'Falha ao criar');
+      setError(axiosMsg(e) || 'Falha ao salvar');
     }
   };
 
+  const handleDelete = async () => {
+    if (!opportunityId) return;
+    try {
+      await remove.mutateAsync(opportunityId);
+      toast('Oportunidade excluída', 'success');
+      setConfirmDelete(false);
+      onClose();
+    } catch (e) {
+      toast(axiosMsg(e) || 'Falha ao excluir', 'error');
+    }
+  };
+
+  const isPending = create.isPending || update.isPending;
+
   return (
-    <Modal open={open} onClose={onClose} title="Nova oportunidade" width={520}>
+    <Modal open={open} onClose={onClose} title={isEdit ? 'Editar oportunidade' : 'Nova oportunidade'} width={520}>
+      {isEdit && !detail.data ? (
+        <div style={{ padding: 24, color: t.textDim, fontSize: 13, textAlign: 'center' }}>Carregando…</div>
+      ) : (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
         <Field label="Título *">
           <input value={title} onChange={(e) => setTitle(e.target.value)} style={inputStyle(t)} autoFocus />
@@ -1878,41 +1975,7 @@ function QuickCreateModal({
         </Field>
 
         <Field label="Tags">
-          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-            {tags.length === 0 ? (
-              <span style={{ fontSize: 11.5, color: t.textFaint }}>Nenhuma tag cadastrada.</span>
-            ) : (
-              tags.map((tag) => {
-                const active = tagIds.includes(tag.id);
-                return (
-                  <button
-                    key={tag.id}
-                    type="button"
-                    onClick={() =>
-                      setTagIds(active ? tagIds.filter((x) => x !== tag.id) : [...tagIds, tag.id])
-                    }
-                    style={{
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: 5,
-                      padding: '4px 10px',
-                      background: active ? hexAlpha(tag.color, 0.18) : 'transparent',
-                      border: `1px solid ${active ? tag.color : t.border}`,
-                      borderRadius: 999,
-                      color: active ? tag.color : t.textDim,
-                      fontSize: 11,
-                      fontWeight: 500,
-                      cursor: 'pointer',
-                      fontFamily: FONT_STACK,
-                    }}
-                  >
-                    <span style={{ width: 6, height: 6, borderRadius: 999, background: tag.color }} />
-                    {tag.name}
-                  </button>
-                );
-              })
-            )}
-          </div>
+          <TagPicker tags={tags} selected={tagIds} onChange={setTagIds} />
         </Field>
 
         {error && (
@@ -1930,20 +1993,65 @@ function QuickCreateModal({
           </div>
         )}
 
-        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
-          <button type="button" onClick={onClose} style={buttonGhost(t)}>
-            Cancelar
-          </button>
-          <button
-            type="button"
-            onClick={submit}
-            disabled={create.isPending}
-            style={{ ...buttonGold(t), opacity: create.isPending ? 0.6 : 1 }}
-          >
-            {create.isPending ? 'Criando…' : 'Criar oportunidade'}
-          </button>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+          {isEdit ? (
+            <button
+              type="button"
+              onClick={() => setConfirmDelete(true)}
+              style={{
+                background: 'transparent',
+                color: t.danger,
+                border: `1px solid ${hexAlpha(t.danger, 0.4)}`,
+                borderRadius: 8,
+                padding: '7px 12px',
+                fontSize: 12,
+                fontWeight: 500,
+                cursor: 'pointer',
+                fontFamily: FONT_STACK,
+              }}
+            >
+              Excluir
+            </button>
+          ) : (
+            <span />
+          )}
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button type="button" onClick={onClose} style={buttonGhost(t)}>
+              Cancelar
+            </button>
+            <button
+              type="button"
+              onClick={submit}
+              disabled={isPending}
+              style={{ ...buttonGold(t), opacity: isPending ? 0.6 : 1 }}
+            >
+              {isPending
+                ? isEdit
+                  ? 'Salvando…'
+                  : 'Criando…'
+                : isEdit
+                  ? 'Salvar'
+                  : 'Criar oportunidade'}
+            </button>
+          </div>
         </div>
       </div>
+      )}
+
+      <ConfirmDialog
+        open={confirmDelete}
+        title="Excluir oportunidade?"
+        description={
+          <>
+            <strong>{title || 'Esta oportunidade'}</strong> e seu histórico serão apagados
+            permanentemente.
+          </>
+        }
+        confirmLabel="Excluir"
+        danger
+        onConfirm={handleDelete}
+        onClose={() => setConfirmDelete(false)}
+      />
     </Modal>
   );
 }

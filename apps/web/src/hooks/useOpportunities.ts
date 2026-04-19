@@ -77,6 +77,21 @@ export function useBoard(pipelineId: string | null, filters: BoardFilters) {
   });
 }
 
+export type OpportunityDetail = BoardCard & {
+  pipelineId: string;
+  stageId: string;
+  customFields: { customFieldId: string; value: string }[];
+  updatedAt: string;
+};
+
+export function useOpportunity(id: string | null) {
+  return useQuery({
+    queryKey: id ? (['opportunity', id] as const) : ['opportunity', 'none'],
+    queryFn: async () => (await api.get<OpportunityDetail>(`/opportunities/${id}`)).data,
+    enabled: !!id,
+  });
+}
+
 export function buildBoardExportUrl(pipelineId: string, filters: BoardFilters): string {
   return `/pipelines/${pipelineId}/opportunities/export?${toQuery(filters)}`;
 }
