@@ -9,6 +9,7 @@ import { healthRoutes } from './routes/health.js';
 import { authRoutes } from './modules/auth/auth.routes.js';
 import { dashboardRoutes } from './modules/dashboard/dashboard.routes.js';
 import { tagsRoutes } from './modules/tags/tags.routes.js';
+import { customFieldsRoutes } from './modules/custom-fields/custom-fields.routes.js';
 
 const app = Fastify({
   logger: {
@@ -42,6 +43,7 @@ await app.register(healthRoutes);
 await app.register(authRoutes, { prefix: '/auth' });
 await app.register(dashboardRoutes, { prefix: '/dashboard' });
 await app.register(tagsRoutes, { prefix: '/tags' });
+await app.register(customFieldsRoutes, { prefix: '/custom-fields' });
 
 try {
   await app.listen({ host: env.API_HOST, port: env.API_PORT });
