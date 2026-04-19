@@ -10,6 +10,7 @@ import { SettingsSection } from './pages/settings/SettingsSection';
 import { SettingsAccount } from './pages/settings/SettingsAccount';
 import { SettingsAppearance } from './pages/settings/SettingsAppearance';
 import { SettingsTags } from './pages/settings/SettingsTags';
+import { SettingsCustomFields } from './pages/settings/SettingsCustomFields';
 import { ProtectedRoute } from './components/ProtectedRoute';
 import { ThemeSync } from './components/ThemeSync';
 import { ToastViewport } from './components/ui/Toast';
@@ -72,10 +73,7 @@ export function App() {
                   path="custom-fields"
                   element={
                     <ProtectedRoute roles={['ADMIN']}>
-                      <SettingsSection
-                        title="Campos Personalizados"
-                        description="Crie campos extras para suas oportunidades."
-                      />
+                      <SettingsCustomFields />
                     </ProtectedRoute>
                   }
                 />
