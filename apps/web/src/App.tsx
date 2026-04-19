@@ -4,6 +4,7 @@ import { ThemeProvider } from './lib/ThemeContext';
 import { AppShell } from './components/shell/AppShell';
 import { DashboardPage } from './pages/Dashboard';
 import { LoginPage } from './pages/Login';
+import { LeadsPage } from './pages/Leads';
 import { PagePlaceholder } from './pages/PagePlaceholder';
 import { SettingsLayout } from './pages/settings/SettingsLayout';
 import { SettingsSection } from './pages/settings/SettingsSection';
@@ -39,7 +40,7 @@ export function App() {
               <Route path="/dashboard" element={<DashboardPage />} />
               <Route path="/pipeline" element={<PagePlaceholder title="Pipeline" icon="Pipeline" />} />
               <Route path="/conversations" element={<PagePlaceholder title="Conversas" icon="Chat" />} />
-              <Route path="/leads" element={<PagePlaceholder title="Leads" icon="Users" />} />
+              <Route path="/leads" element={<LeadsPage />} />
               <Route path="/reminders" element={<PagePlaceholder title="Lembretes" icon="Bell" />} />
               <Route path="/automations" element={<PagePlaceholder title="Automações" icon="Bolt" />} />
               <Route path="/whatsapp" element={<PagePlaceholder title="WhatsApp" icon="Phone" />} />
