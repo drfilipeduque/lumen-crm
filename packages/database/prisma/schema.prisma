@@ -200,6 +200,7 @@ model Contact {
 
   opportunities Opportunity[]
   conversations Conversation[]
+  tags          Tag[]          @relation("ContactTags")
 
   @@index([ownerId])
   @@index([name])
@@ -312,6 +313,7 @@ model Tag {
   createdAt DateTime @default(now())
 
   opportunities Opportunity[] @relation("OpportunityTags")
+  contacts      Contact[]     @relation("ContactTags")
 }
 
 // ============================================================
