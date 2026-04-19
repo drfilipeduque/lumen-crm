@@ -13,6 +13,7 @@ import { customFieldsRoutes } from './modules/custom-fields/custom-fields.routes
 import { pipelinesRoutes, stagesRoutes } from './modules/pipelines/pipelines.routes.js';
 import { contactsRoutes } from './modules/contacts/contacts.routes.js';
 import { teamRoutes } from './modules/team/team.routes.js';
+import { opportunitiesRoutes, opportunityBoardRoutes } from './modules/opportunities/opportunities.routes.js';
 
 const app = Fastify({
   logger: {
@@ -51,6 +52,8 @@ await app.register(pipelinesRoutes, { prefix: '/pipelines' });
 await app.register(stagesRoutes, { prefix: '/stages' });
 await app.register(contactsRoutes, { prefix: '/contacts' });
 await app.register(teamRoutes, { prefix: '/team' });
+await app.register(opportunitiesRoutes, { prefix: '/opportunities' });
+await app.register(opportunityBoardRoutes, { prefix: '/pipelines' });
 
 try {
   await app.listen({ host: env.API_HOST, port: env.API_PORT });

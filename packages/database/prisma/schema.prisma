@@ -256,6 +256,7 @@ model Opportunity {
   priority    Priority  @default(MEDIUM)
   description String?
   dueDate     DateTime?
+  order       Int       @default(0)
 
   pipelineId String
   stageId    String
@@ -283,6 +284,7 @@ model Opportunity {
   @@index([ownerId])
   @@index([dueDate])
   @@index([createdAt])
+  @@index([stageId, order])
 }
 
 model OpportunityHistory {
