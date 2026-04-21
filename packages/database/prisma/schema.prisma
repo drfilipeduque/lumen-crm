@@ -382,6 +382,9 @@ model Reminder {
   completed     Boolean   @default(false)
   completedAt   DateTime?
   snoozedUntil  DateTime?
+  notified      Boolean   @default(false)
+  notifiedAt    DateTime?
+  seenAt        DateTime?
   opportunityId String
   userId        String
 
@@ -394,6 +397,7 @@ model Reminder {
   @@index([dueAt])
   @@index([userId, completed])
   @@index([opportunityId])
+  @@index([completed, notified, dueAt])
 }
 
 model File {

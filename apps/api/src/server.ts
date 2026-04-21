@@ -16,6 +16,8 @@ import { teamRoutes } from './modules/team/team.routes.js';
 import { opportunitiesRoutes, opportunityBoardRoutes } from './modules/opportunities/opportunities.routes.js';
 import { filesRoutes, opportunityFilesRoutes } from './modules/files/files.routes.js';
 import { opportunityRemindersRoutes, remindersRoutes } from './modules/reminders/reminders.routes.js';
+import { initRealtime } from './lib/realtime.js';
+import { startReminderWorker } from './workers/reminders.js';
 
 const app = Fastify({
   logger: {
@@ -65,6 +67,8 @@ await app.register(remindersRoutes, { prefix: '/reminders' });
 try {
   await app.listen({ host: env.API_HOST, port: env.API_PORT });
   app.log.info(`Lumen API ouvindo em http://${env.API_HOST}:${env.API_PORT}`);
+  initRealtime(app, env.CORS_ORIGIN.split(',').map((s) => s.trim()));
+  startReminderWorker(app.log);
 } catch (err) {
   app.log.error(err);
   process.exit(1);

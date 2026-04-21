@@ -41,12 +41,17 @@ async function assertReminderVisible(actor: Actor, reminderId: string) {
 export type ReminderDTO = {
   id: string;
   opportunityId: string;
+  opportunity?: { id: string; title: string; contactName: string } | null;
   title: string;
   description: string | null;
   dueAt: string;
+  effectiveDueAt: string;
   completed: boolean;
   completedAt: string | null;
   snoozedUntil: string | null;
+  notified: boolean;
+  notifiedAt: string | null;
+  seenAt: string | null;
   createdBy: { id: string; name: string } | null;
   createdAt: string;
   updatedAt: string;
@@ -56,12 +61,16 @@ export type ReminderDTO = {
 function toDTO(r: {
   id: string;
   opportunityId: string;
+  opportunity?: { id: string; title: string; contact: { name: string } } | null;
   title: string;
   description: string | null;
   dueAt: Date;
   completed: boolean;
   completedAt: Date | null;
   snoozedUntil: Date | null;
+  notified: boolean;
+  notifiedAt: Date | null;
+  seenAt: Date | null;
   user: { id: string; name: string } | null;
   createdAt: Date;
   updatedAt: Date;
@@ -71,12 +80,19 @@ function toDTO(r: {
   return {
     id: r.id,
     opportunityId: r.opportunityId,
+    opportunity: r.opportunity
+      ? { id: r.opportunity.id, title: r.opportunity.title, contactName: r.opportunity.contact.name }
+      : null,
     title: r.title,
     description: r.description,
     dueAt: r.dueAt.toISOString(),
+    effectiveDueAt: effective.toISOString(),
     completed: r.completed,
     completedAt: r.completedAt ? r.completedAt.toISOString() : null,
     snoozedUntil: r.snoozedUntil ? r.snoozedUntil.toISOString() : null,
+    notified: r.notified,
+    notifiedAt: r.notifiedAt ? r.notifiedAt.toISOString() : null,
+    seenAt: r.seenAt ? r.seenAt.toISOString() : null,
     createdBy: r.user,
     createdAt: r.createdAt.toISOString(),
     updatedAt: r.updatedAt.toISOString(),
@@ -228,4 +244,160 @@ export async function deleteReminder(actor: Actor, id: string): Promise<{ ok: tr
   await assertReminderVisible(actor, id);
   await prisma.reminder.delete({ where: { id } });
   return { ok: true };
+}
+
+// ============================================================
+// LISTAGEM GLOBAL
+// ============================================================
+
+export type ListReminderStatus = 'PENDING' | 'OVERDUE' | 'COMPLETED' | 'ALL';
+export type ListReminderPeriod = 'today' | 'week' | 'month' | 'all';
+
+export async function listGlobalReminders(
+  actor: Actor,
+  args: { status: ListReminderStatus; period: ListReminderPeriod; userId?: string },
+): Promise<ReminderDTO[]> {
+  // Apenas admin pode passar userId arbitrário; demais sempre veem só os seus
+  const filterUserId = actor.role === 'ADMIN' && args.userId ? args.userId : actor.id;
+  const now = new Date();
+
+  const where: Prisma.ReminderWhereInput = { userId: filterUserId };
+
+  if (args.status === 'PENDING') {
+    where.completed = false;
+    where.OR = [
+      { snoozedUntil: { not: null, gt: now } },
+      { snoozedUntil: null, dueAt: { gt: now } },
+    ];
+  } else if (args.status === 'OVERDUE') {
+    where.completed = false;
+    where.OR = [
+      { snoozedUntil: { not: null, lte: now } },
+      { snoozedUntil: null, dueAt: { lte: now } },
+    ];
+  } else if (args.status === 'COMPLETED') {
+    where.completed = true;
+  }
+
+  if (args.period !== 'all') {
+    const range = periodRange(args.period);
+    if (range) {
+      where.dueAt = { ...(typeof where.dueAt === 'object' ? where.dueAt : {}), ...range };
+    }
+  }
+
+  const reminders = await prisma.reminder.findMany({
+    where,
+    orderBy: [{ completed: 'asc' }, { dueAt: 'asc' }],
+    include: {
+      user: { select: { id: true, name: true } },
+      opportunity: { select: { id: true, title: true, contact: { select: { name: true } } } },
+    },
+  });
+  return reminders.map(toDTO);
+}
+
+function periodRange(period: 'today' | 'week' | 'month'): { gte: Date; lte: Date } | null {
+  const now = new Date();
+  const start = new Date(now);
+  start.setHours(0, 0, 0, 0);
+  if (period === 'today') {
+    const end = new Date(start);
+    end.setHours(23, 59, 59, 999);
+    return { gte: start, lte: end };
+  }
+  if (period === 'week') {
+    const end = new Date(start);
+    end.setDate(end.getDate() + 7);
+    return { gte: start, lte: end };
+  }
+  if (period === 'month') {
+    const end = new Date(start);
+    end.setMonth(end.getMonth() + 1);
+    return { gte: start, lte: end };
+  }
+  return null;
+}
+
+// ============================================================
+// PENDING COUNT (badge do sino)
+// ============================================================
+
+export async function pendingCount(actor: Actor): Promise<number> {
+  const now = new Date();
+  return prisma.reminder.count({
+    where: {
+      userId: actor.id,
+      completed: false,
+      OR: [
+        { snoozedUntil: { not: null, lte: now } },
+        { snoozedUntil: null, dueAt: { lte: now } },
+      ],
+    },
+  });
+}
+
+// ============================================================
+// NOTIFICAÇÕES (lembretes já notificados, ainda não vistos)
+// ============================================================
+
+export async function listNotifications(actor: Actor): Promise<ReminderDTO[]> {
+  const reminders = await prisma.reminder.findMany({
+    where: {
+      userId: actor.id,
+      completed: false,
+      notified: true,
+      seenAt: null,
+    },
+    orderBy: { notifiedAt: 'desc' },
+    include: {
+      user: { select: { id: true, name: true } },
+      opportunity: { select: { id: true, title: true, contact: { select: { name: true } } } },
+    },
+  });
+  return reminders.map(toDTO);
+}
+
+export async function markSeen(actor: Actor, id: string): Promise<{ ok: true }> {
+  await assertReminderVisible(actor, id);
+  await prisma.reminder.update({
+    where: { id },
+    data: { seenAt: new Date() },
+  });
+  return { ok: true };
+}
+
+export async function markAllSeen(actor: Actor): Promise<{ ok: true; affected: number }> {
+  const r = await prisma.reminder.updateMany({
+    where: { userId: actor.id, notified: true, seenAt: null },
+    data: { seenAt: new Date() },
+  });
+  return { ok: true, affected: r.count };
+}
+
+// ============================================================
+// WORKER: encontra lembretes vencidos não-notificados
+// (usado pelo setInterval em src/workers/reminders.ts)
+// ============================================================
+
+export async function findDueAndNotify(): Promise<{ id: string; userId: string }[]> {
+  const now = new Date();
+  const due = await prisma.reminder.findMany({
+    where: {
+      completed: false,
+      notified: false,
+      OR: [
+        { snoozedUntil: { not: null, lte: now } },
+        { snoozedUntil: null, dueAt: { lte: now } },
+      ],
+    },
+    select: { id: true, userId: true },
+    take: 200,
+  });
+  if (due.length === 0) return [];
+  await prisma.reminder.updateMany({
+    where: { id: { in: due.map((r) => r.id) } },
+    data: { notified: true, notifiedAt: now },
+  });
+  return due;
 }
