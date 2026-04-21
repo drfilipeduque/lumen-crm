@@ -151,6 +151,48 @@ export function useMoveOpportunity() {
   });
 }
 
+export function useSetDescription() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, description }: { id: string; description: string | null }) =>
+      (await api.put(`/opportunities/${id}/description`, { description })).data,
+    onSuccess: (_, vars) => {
+      qc.invalidateQueries({ queryKey: ['opportunity', vars.id] });
+      qc.invalidateQueries({ queryKey: ['opportunity-history', vars.id] });
+    },
+  });
+}
+
+export function useSetTags() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, tagIds }: { id: string; tagIds: string[] }) =>
+      (await api.put(`/opportunities/${id}/tags`, { tagIds })).data,
+    onSuccess: (_, vars) => {
+      qc.invalidateQueries({ queryKey: ['opportunity', vars.id] });
+      qc.invalidateQueries({ queryKey: ['opportunity-history', vars.id] });
+      qc.invalidateQueries({ queryKey: ['board'] });
+    },
+  });
+}
+
+export function useSetOppCustomFields() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      id,
+      rows,
+    }: {
+      id: string;
+      rows: { customFieldId: string; value: string }[];
+    }) => (await api.put(`/opportunities/${id}/custom-fields`, rows)).data,
+    onSuccess: (_, vars) => {
+      qc.invalidateQueries({ queryKey: ['opportunity', vars.id] });
+      qc.invalidateQueries({ queryKey: ['opportunity-history', vars.id] });
+    },
+  });
+}
+
 export function useReorderOpportunity() {
   const qc = useQueryClient();
   return useMutation({
