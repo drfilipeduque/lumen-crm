@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../../lib/ThemeContext';
 import { Icons, type IconName } from '../icons';
 import { useAuthStore } from '../../stores/useAuthStore';
+import { NotificationBell } from './NotificationBell';
 
 function SearchBar() {
   const { tokens: t } = useTheme();
@@ -89,56 +90,6 @@ function ThemeToggle() {
       title={isDark ? 'Modo claro' : 'Modo escuro'}
     >
       {isDark ? <Icons.Sun s={14} c={t.icon} /> : <Icons.Moon s={14} c={t.icon} />}
-    </button>
-  );
-}
-
-function NotificationBell({ count = 3 }: { count?: number }) {
-  const { tokens: t } = useTheme();
-  const [hover, setHover] = useState(false);
-  return (
-    <button
-      onMouseEnter={() => setHover(true)}
-      onMouseLeave={() => setHover(false)}
-      style={{
-        position: 'relative',
-        width: 32,
-        height: 32,
-        border: `1px solid ${hover ? t.borderStrong : t.border}`,
-        background: hover ? t.bgHover : 'transparent',
-        borderRadius: 7,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        cursor: 'pointer',
-        transition: 'all 120ms ease',
-      }}
-    >
-      <Icons.Bell s={14} c={t.icon} />
-      {count > 0 && (
-        <span
-          style={{
-            position: 'absolute',
-            top: -4,
-            right: -4,
-            minWidth: 16,
-            height: 16,
-            padding: '0 4px',
-            borderRadius: 8,
-            background: t.gold,
-            color: '#0a0a0a',
-            fontSize: 10,
-            fontWeight: 600,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            border: `2px solid ${t.bg}`,
-            letterSpacing: 0,
-          }}
-        >
-          {count}
-        </span>
-      )}
     </button>
   );
 }
@@ -425,7 +376,7 @@ export function Header({
         </button>
         <div style={{ width: 1, height: 20, background: t.border, margin: '0 2px' }} />
         <ThemeToggle />
-        <NotificationBell count={3} />
+        <NotificationBell />
         <AvatarMenu />
       </div>
     </header>

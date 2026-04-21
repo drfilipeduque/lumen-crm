@@ -6,6 +6,7 @@ import { DashboardPage } from './pages/Dashboard';
 import { LoginPage } from './pages/Login';
 import { LeadsPage } from './pages/Leads';
 import { PipelinePage } from './pages/Pipeline';
+import { RemindersPage } from './pages/Reminders';
 import { PagePlaceholder } from './pages/PagePlaceholder';
 import { SettingsLayout } from './pages/settings/SettingsLayout';
 import { SettingsSection } from './pages/settings/SettingsSection';
@@ -42,7 +43,7 @@ export function App() {
               <Route path="/pipeline" element={<PipelinePage />} />
               <Route path="/conversations" element={<PagePlaceholder title="Conversas" icon="Chat" />} />
               <Route path="/leads" element={<LeadsPage />} />
-              <Route path="/reminders" element={<PagePlaceholder title="Lembretes" icon="Bell" />} />
+              <Route path="/reminders" element={<RemindersPage />} />
               <Route path="/automations" element={<PagePlaceholder title="Automações" icon="Bolt" />} />
               <Route path="/whatsapp" element={<PagePlaceholder title="WhatsApp" icon="Phone" />} />
 

@@ -4,6 +4,7 @@ import { useTheme } from '../../lib/ThemeContext';
 import { FONT_STACK } from '../../lib/theme';
 import { Sidebar, NAV_ITEMS } from './Sidebar';
 import { Header } from './Header';
+import { RealtimeListener } from '../RealtimeListener';
 
 function deriveTitle(pathname: string): string {
   const match = NAV_ITEMS.find(
@@ -31,6 +32,7 @@ export function AppShell({ initialCollapsed = false }: { initialCollapsed?: bool
         fontFeatureSettings: '"cv11", "ss01"',
       }}
     >
+      <RealtimeListener />
       <Sidebar collapsed={collapsed} setCollapsed={setCollapsed} />
       <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
         <Header pageTitle={title} pageCrumb="Workspace" />

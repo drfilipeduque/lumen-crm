@@ -4,17 +4,79 @@ import { api } from '../lib/api';
 export type Reminder = {
   id: string;
   opportunityId: string;
+  opportunity?: { id: string; title: string; contactName: string } | null;
   title: string;
   description: string | null;
   dueAt: string;
+  effectiveDueAt: string;
   completed: boolean;
   completedAt: string | null;
   snoozedUntil: string | null;
+  notified: boolean;
+  notifiedAt: string | null;
+  seenAt: string | null;
   createdBy: { id: string; name: string } | null;
   createdAt: string;
   updatedAt: string;
   overdue: boolean;
 };
+
+export type ReminderListStatus = 'PENDING' | 'OVERDUE' | 'COMPLETED' | 'ALL';
+export type ReminderListPeriod = 'today' | 'week' | 'month' | 'all';
+
+export function useGlobalReminders(args: {
+  status: ReminderListStatus;
+  period: ReminderListPeriod;
+  userId?: string;
+}) {
+  const params = new URLSearchParams();
+  params.set('status', args.status);
+  params.set('period', args.period);
+  if (args.userId) params.set('userId', args.userId);
+  return useQuery({
+    queryKey: ['reminders-global', args],
+    queryFn: async () => (await api.get<Reminder[]>(`/reminders?${params.toString()}`)).data,
+  });
+}
+
+export function usePendingCount() {
+  return useQuery({
+    queryKey: ['reminders-pending-count'],
+    queryFn: async () => (await api.get<{ count: number }>(`/reminders/pending-count`)).data.count,
+    refetchInterval: 60_000,
+  });
+}
+
+export function useNotifications() {
+  return useQuery({
+    queryKey: ['reminders-notifications'],
+    queryFn: async () => (await api.get<Reminder[]>(`/reminders/notifications`)).data,
+    refetchInterval: 60_000,
+  });
+}
+
+export function useMarkSeen() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) =>
+      (await api.post<{ ok: true }>(`/reminders/${id}/mark-seen`, {})).data,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['reminders-notifications'] });
+      qc.invalidateQueries({ queryKey: ['reminders-pending-count'] });
+    },
+  });
+}
+
+export function useMarkAllSeen() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async () =>
+      (await api.post<{ ok: true; affected: number }>(`/reminders/mark-all-seen`, {})).data,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['reminders-notifications'] });
+    },
+  });
+}
 
 const key = (opportunityId: string) => ['opportunity-reminders', opportunityId] as const;
 
