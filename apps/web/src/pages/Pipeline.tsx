@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import axios from 'axios';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { OpportunityPopup } from '../components/opportunity/OpportunityPopup';
 import {
   DndContext,
   DragOverlay,
@@ -78,7 +79,14 @@ export function PipelinePage() {
   const [dueFrom, setDueFrom] = useState('');
   const [dueTo, setDueTo] = useState('');
   const [creating, setCreating] = useState<{ stageId: string | null }>({ stageId: null });
-  const [editingId, setEditingId] = useState<string | null>(null);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const editingId = searchParams.get('opp');
+  const setEditingId = (id: string | null) => {
+    const next = new URLSearchParams(searchParams);
+    if (id) next.set('opp', id);
+    else next.delete('opp');
+    setSearchParams(next, { replace: true });
+  };
 
   useEffect(() => {
     const id = setTimeout(() => setDebouncedSearch(search.trim()), 300);
@@ -210,18 +218,12 @@ export function PipelinePage() {
         />
       )}
 
-      {/* Edição — abre ao clicar num card */}
-      {editingId && pipelineId && (
-        <OpportunityModal
+      {/* Edição — abre popup central com 6 abas */}
+      {editingId && (
+        <OpportunityPopup
           key={editingId}
-          open
           opportunityId={editingId}
           onClose={() => setEditingId(null)}
-          pipelineId={pipelineId}
-          stageId={null}
-          tags={tagsQ.data ?? []}
-          team={teamQ.data ?? []}
-          defaultOwnerId={me?.id ?? null}
         />
       )}
     </div>
