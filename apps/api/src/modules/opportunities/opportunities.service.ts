@@ -614,6 +614,187 @@ export async function deleteOpportunity(actor: Actor, id: string): Promise<{ ok:
 }
 
 // ============================================================
+// HISTORY LIST (com filtro por grupo)
+// ============================================================
+
+export type HistoryFilter =
+  | 'ALL'
+  | 'STAGE_CHANGED'
+  | 'FIELD_UPDATED'
+  | 'TAG'
+  | 'OWNER'
+  | 'REMINDER'
+  | 'FILE'
+  | 'DESCRIPTION';
+
+const HISTORY_GROUPS: Record<HistoryFilter, string[] | null> = {
+  ALL: null,
+  STAGE_CHANGED: ['STAGE_CHANGE'],
+  FIELD_UPDATED: ['FIELD_UPDATE', 'VALUE_CHANGED', 'PRIORITY_CHANGED'],
+  TAG: ['TAG_ADDED', 'TAG_REMOVED'],
+  OWNER: ['OWNER_CHANGED'],
+  REMINDER: ['REMINDER_CREATED', 'REMINDER_COMPLETED'],
+  FILE: ['FILE_UPLOADED', 'FILE_DELETED'],
+  DESCRIPTION: ['DESCRIPTION_UPDATED'],
+};
+
+export type HistoryEntry = {
+  id: string;
+  action: string;
+  fromStageId: string | null;
+  toStageId: string | null;
+  fromStageName: string | null;
+  toStageName: string | null;
+  metadata: unknown;
+  user: { id: string; name: string; avatar: string | null } | null;
+  createdAt: string;
+};
+
+export async function listHistory(
+  actor: Actor,
+  opportunityId: string,
+  filter: HistoryFilter,
+): Promise<HistoryEntry[]> {
+  const opp = await prisma.opportunity.findFirst({
+    where: { AND: [{ id: opportunityId }, ownerScope(actor)] },
+    select: { id: true },
+  });
+  if (!opp) throw new OpportunityError('NOT_FOUND', 'Oportunidade não encontrada', 404);
+
+  const actions = HISTORY_GROUPS[filter];
+  const rows = await prisma.opportunityHistory.findMany({
+    where: {
+      opportunityId,
+      ...(actions ? { action: { in: actions as never[] } } : {}),
+    },
+    orderBy: { createdAt: 'desc' },
+    include: {
+      user: { select: { id: true, name: true, avatar: true } },
+      fromStage: { select: { name: true } },
+      toStage: { select: { name: true } },
+    },
+  });
+  return rows.map((r) => ({
+    id: r.id,
+    action: r.action,
+    fromStageId: r.fromStageId,
+    toStageId: r.toStageId,
+    fromStageName: r.fromStage?.name ?? null,
+    toStageName: r.toStage?.name ?? null,
+    metadata: r.metadata,
+    user: r.user,
+    createdAt: r.createdAt.toISOString(),
+  }));
+}
+
+// ============================================================
+// DESCRIÇÃO / TAGS / CUSTOM FIELDS (endpoints thin)
+// ============================================================
+
+export async function setDescription(
+  actor: Actor,
+  id: string,
+  description: string | null,
+): Promise<OpportunityDetail> {
+  const prev = await prisma.opportunity.findFirst({
+    where: { AND: [{ id }, ownerScope(actor)] },
+    select: { id: true, description: true },
+  });
+  if (!prev) throw new OpportunityError('NOT_FOUND', 'Oportunidade não encontrada', 404);
+
+  await prisma.opportunity.update({ where: { id }, data: { description } });
+
+  if ((prev.description ?? null) !== (description ?? null)) {
+    await prisma.opportunityHistory.create({
+      data: { opportunityId: id, action: 'DESCRIPTION_UPDATED', userId: actor.id },
+    });
+  }
+  return getOpportunity(actor, id);
+}
+
+export async function setTags(
+  actor: Actor,
+  id: string,
+  tagIds: string[],
+): Promise<OpportunityDetail> {
+  const prev = await prisma.opportunity.findFirst({
+    where: { AND: [{ id }, ownerScope(actor)] },
+    include: { tags: { select: { id: true } } },
+  });
+  if (!prev) throw new OpportunityError('NOT_FOUND', 'Oportunidade não encontrada', 404);
+
+  await validateTags(tagIds);
+  await prisma.opportunity.update({
+    where: { id },
+    data: { tags: { set: tagIds.map((tid) => ({ id: tid })) } },
+  });
+
+  const before = new Set(prev.tags.map((t) => t.id));
+  const after = new Set(tagIds);
+  const entries: Prisma.OpportunityHistoryCreateManyInput[] = [];
+  for (const tid of tagIds) {
+    if (!before.has(tid)) {
+      entries.push({
+        opportunityId: id,
+        action: 'TAG_ADDED',
+        userId: actor.id,
+        metadata: { tagId: tid } as Prisma.InputJsonValue,
+      });
+    }
+  }
+  for (const tid of before) {
+    if (!after.has(tid)) {
+      entries.push({
+        opportunityId: id,
+        action: 'TAG_REMOVED',
+        userId: actor.id,
+        metadata: { tagId: tid } as Prisma.InputJsonValue,
+      });
+    }
+  }
+  if (entries.length > 0) await prisma.opportunityHistory.createMany({ data: entries });
+
+  return getOpportunity(actor, id);
+}
+
+export async function setOpportunityCustomFields(
+  actor: Actor,
+  id: string,
+  rows: { customFieldId: string; value: string }[],
+): Promise<OpportunityDetail> {
+  const opp = await prisma.opportunity.findFirst({
+    where: { AND: [{ id }, ownerScope(actor)] },
+    select: { id: true, pipelineId: true },
+  });
+  if (!opp) throw new OpportunityError('NOT_FOUND', 'Oportunidade não encontrada', 404);
+
+  const record: Record<string, string> = {};
+  for (const r of rows) record[r.customFieldId] = r.value;
+  await validateCustomFields(opp.pipelineId, record);
+
+  await prisma.$transaction(
+    rows.map((r) =>
+      prisma.customFieldValue.upsert({
+        where: { customFieldId_opportunityId: { customFieldId: r.customFieldId, opportunityId: id } },
+        create: { customFieldId: r.customFieldId, opportunityId: id, value: r.value },
+        update: { value: r.value },
+      }),
+    ),
+  );
+
+  await prisma.opportunityHistory.create({
+    data: {
+      opportunityId: id,
+      action: 'FIELD_UPDATE',
+      userId: actor.id,
+      metadata: { fields: ['customFields'] } as Prisma.InputJsonValue,
+    },
+  });
+
+  return getOpportunity(actor, id);
+}
+
+// ============================================================
 // EXPORT CSV
 // ============================================================
 

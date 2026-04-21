@@ -9,6 +9,7 @@ import {
   reorderSchema,
   updateOpportunitySchema,
 } from './opportunities.schemas.js';
+import { z } from 'zod';
 import {
   OpportunityError,
   createOpportunity,
@@ -16,9 +17,14 @@ import {
   exportOpportunitiesCsv,
   getBoard,
   getOpportunity,
+  listHistory,
   moveOpportunity,
   reorderOpportunity,
+  setDescription,
+  setOpportunityCustomFields,
+  setTags,
   updateOpportunity,
+  type HistoryFilter,
 } from './opportunities.service.js';
 
 function send(reply: FastifyReply, e: unknown) {
@@ -97,6 +103,71 @@ export const opportunitiesRoutes: FastifyPluginAsync = async (app) => {
     if (!params.success) return reply.code(400).send({ error: 'VALIDATION', issues: params.error.flatten() });
     try {
       return reply.send(await deleteOpportunity(req.user!, params.data.id));
+    } catch (e) {
+      return send(reply, e);
+    }
+  });
+
+  app.get('/:id/history', async (req, reply) => {
+    const params = idParamSchema.safeParse(req.params);
+    if (!params.success) return reply.code(400).send({ error: 'VALIDATION', issues: params.error.flatten() });
+    const query = z
+      .object({
+        type: z
+          .enum(['ALL', 'STAGE_CHANGED', 'FIELD_UPDATED', 'TAG', 'OWNER', 'REMINDER', 'FILE', 'DESCRIPTION'])
+          .default('ALL'),
+      })
+      .safeParse(req.query);
+    if (!query.success) return reply.code(400).send({ error: 'VALIDATION', issues: query.error.flatten() });
+    try {
+      return reply.send(await listHistory(req.user!, params.data.id, query.data.type as HistoryFilter));
+    } catch (e) {
+      return send(reply, e);
+    }
+  });
+
+  app.put('/:id/description', async (req, reply) => {
+    const params = idParamSchema.safeParse(req.params);
+    if (!params.success) return reply.code(400).send({ error: 'VALIDATION', issues: params.error.flatten() });
+    const body = z
+      .object({
+        description: z.string().max(10_000, 'Descrição muito longa').nullable().optional(),
+      })
+      .safeParse(req.body);
+    if (!body.success) return reply.code(400).send({ error: 'VALIDATION', issues: body.error.flatten() });
+    try {
+      return reply.send(await setDescription(req.user!, params.data.id, body.data.description ?? null));
+    } catch (e) {
+      return send(reply, e);
+    }
+  });
+
+  app.put('/:id/tags', async (req, reply) => {
+    const params = idParamSchema.safeParse(req.params);
+    if (!params.success) return reply.code(400).send({ error: 'VALIDATION', issues: params.error.flatten() });
+    const body = z.object({ tagIds: z.array(z.string().min(1)) }).safeParse(req.body);
+    if (!body.success) return reply.code(400).send({ error: 'VALIDATION', issues: body.error.flatten() });
+    try {
+      return reply.send(await setTags(req.user!, params.data.id, body.data.tagIds));
+    } catch (e) {
+      return send(reply, e);
+    }
+  });
+
+  app.put('/:id/custom-fields', async (req, reply) => {
+    const params = idParamSchema.safeParse(req.params);
+    if (!params.success) return reply.code(400).send({ error: 'VALIDATION', issues: params.error.flatten() });
+    const body = z
+      .array(
+        z.object({
+          customFieldId: z.string().min(1),
+          value: z.string(),
+        }),
+      )
+      .safeParse(req.body);
+    if (!body.success) return reply.code(400).send({ error: 'VALIDATION', issues: body.error.flatten() });
+    try {
+      return reply.send(await setOpportunityCustomFields(req.user!, params.data.id, body.data));
     } catch (e) {
       return send(reply, e);
     }

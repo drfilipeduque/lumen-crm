@@ -14,6 +14,8 @@ import { pipelinesRoutes, stagesRoutes } from './modules/pipelines/pipelines.rou
 import { contactsRoutes } from './modules/contacts/contacts.routes.js';
 import { teamRoutes } from './modules/team/team.routes.js';
 import { opportunitiesRoutes, opportunityBoardRoutes } from './modules/opportunities/opportunities.routes.js';
+import { filesRoutes, opportunityFilesRoutes } from './modules/files/files.routes.js';
+import { opportunityRemindersRoutes, remindersRoutes } from './modules/reminders/reminders.routes.js';
 
 const app = Fastify({
   logger: {
@@ -31,7 +33,8 @@ await app.register(cors, {
 });
 
 await app.register(multipart, {
-  limits: { fileSize: 2 * 1024 * 1024, files: 1 },
+  // limite global; rotas individuais (ex.: avatar) impõem limites menores
+  limits: { fileSize: 20 * 1024 * 1024, files: 1 },
 });
 
 await mkdir(UPLOADS_DIR, { recursive: true });
@@ -54,6 +57,10 @@ await app.register(contactsRoutes, { prefix: '/contacts' });
 await app.register(teamRoutes, { prefix: '/team' });
 await app.register(opportunitiesRoutes, { prefix: '/opportunities' });
 await app.register(opportunityBoardRoutes, { prefix: '/pipelines' });
+await app.register(opportunityFilesRoutes, { prefix: '/opportunities' });
+await app.register(opportunityRemindersRoutes, { prefix: '/opportunities' });
+await app.register(filesRoutes, { prefix: '/files' });
+await app.register(remindersRoutes, { prefix: '/reminders' });
 
 try {
   await app.listen({ host: env.API_HOST, port: env.API_PORT });
