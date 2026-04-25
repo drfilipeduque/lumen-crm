@@ -5,6 +5,7 @@ import { useAuthStore } from '../stores/useAuthStore';
 import { toast } from './ui/Toast';
 
 type ReminderDuePayload = { id: string; title: string; opportunityId: string };
+type WAConnectionUpdate = { connectionId: string; status: string; qr?: string; phone?: string | null };
 
 let beepCtx: AudioContext | null = null;
 function playBeep() {
@@ -47,6 +48,15 @@ export function RealtimeListener() {
   const qc = useQueryClient();
   const user = useAuthStore((s) => s.user);
   const lastShownRef = useRef<Set<string>>(new Set());
+
+  useSocketEvent<WAConnectionUpdate>('whatsapp:connection-update', (payload) => {
+    qc.invalidateQueries({ queryKey: ['whatsapp-connections'] });
+    qc.invalidateQueries({ queryKey: ['whatsapp-qr', payload.connectionId] });
+    qc.invalidateQueries({ queryKey: ['whatsapp-entry-rules'] });
+    if (payload.status === 'CONNECTED') {
+      toast(`📱 WhatsApp conectado${payload.phone ? ` (${payload.phone})` : ''}`, 'success');
+    }
+  });
 
   useSocketEvent<ReminderDuePayload>('reminder:due', (payload) => {
     if (lastShownRef.current.has(payload.id)) return;

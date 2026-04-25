@@ -7,6 +7,7 @@ import { LoginPage } from './pages/Login';
 import { LeadsPage } from './pages/Leads';
 import { PipelinePage } from './pages/Pipeline';
 import { RemindersPage } from './pages/Reminders';
+import { WhatsAppPage } from './pages/WhatsApp';
 import { PagePlaceholder } from './pages/PagePlaceholder';
 import { SettingsLayout } from './pages/settings/SettingsLayout';
 import { SettingsSection } from './pages/settings/SettingsSection';
@@ -45,7 +46,7 @@ export function App() {
               <Route path="/leads" element={<LeadsPage />} />
               <Route path="/reminders" element={<RemindersPage />} />
               <Route path="/automations" element={<PagePlaceholder title="Automações" icon="Bolt" />} />
-              <Route path="/whatsapp" element={<PagePlaceholder title="WhatsApp" icon="Phone" />} />
+              <Route path="/whatsapp" element={<WhatsAppPage />} />
 
               <Route path="/settings" element={<SettingsLayout />}>
                 <Route index element={<Navigate to="/settings/account" replace />} />
