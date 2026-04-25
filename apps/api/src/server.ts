@@ -18,6 +18,12 @@ import { filesRoutes, opportunityFilesRoutes } from './modules/files/files.route
 import { opportunityRemindersRoutes, remindersRoutes } from './modules/reminders/reminders.routes.js';
 import { initRealtime } from './lib/realtime.js';
 import { startReminderWorker } from './workers/reminders.js';
+import {
+  whatsappConnectionsRoutes,
+  whatsappEntryRulesRoutes,
+} from './modules/whatsapp/connections.routes.js';
+import { conversationMessagesRoutes } from './modules/whatsapp/messages.routes.js';
+import { restoreAllSessions } from './modules/whatsapp/baileys/session-manager.js';
 
 const app = Fastify({
   logger: {
@@ -63,12 +69,17 @@ await app.register(opportunityFilesRoutes, { prefix: '/opportunities' });
 await app.register(opportunityRemindersRoutes, { prefix: '/opportunities' });
 await app.register(filesRoutes, { prefix: '/files' });
 await app.register(remindersRoutes, { prefix: '/reminders' });
+await app.register(whatsappConnectionsRoutes, { prefix: '/whatsapp/connections' });
+await app.register(whatsappEntryRulesRoutes, { prefix: '/whatsapp/entry-rules' });
+await app.register(conversationMessagesRoutes, { prefix: '/conversations' });
 
 try {
   await app.listen({ host: env.API_HOST, port: env.API_PORT });
   app.log.info(`Lumen API ouvindo em http://${env.API_HOST}:${env.API_PORT}`);
   initRealtime(app, env.CORS_ORIGIN.split(',').map((s) => s.trim()));
   startReminderWorker(app.log);
+  // Reabre sessões WhatsApp persistidas
+  void restoreAllSessions().catch((err) => app.log.error({ err }, 'restoreAllSessions failed'));
 } catch (err) {
   app.log.error(err);
   process.exit(1);

@@ -38,8 +38,14 @@ export function initRealtime(app: FastifyInstance, allowedOrigins: string[]) {
 // Eventos previstos
 export type RealtimeEventMap = {
   'reminder:due': { id: string; title: string; opportunityId: string };
-  'message:new': { conversationId: string; messageId: string };
+  'message:new': { conversationId: string; messageId: string; contactId: string };
   'conversation:update': { conversationId: string };
+  'whatsapp:connection-update': {
+    connectionId: string;
+    status: string;
+    qr?: string;
+    phone?: string | null;
+  };
 };
 
 export function emitToUser<E extends keyof RealtimeEventMap>(

@@ -22,6 +22,12 @@ const envSchema = z.object({
   JWT_REFRESH_SECRET: z.string().min(16).default('dev-refresh-secret-change-me-please'),
   JWT_ACCESS_EXPIRES_IN: z.string().default('15m'),
   JWT_REFRESH_EXPIRES_IN: z.string().default('7d'),
+  // Chave (hex, 64 chars = 32 bytes) usada pra criptografar
+  // credenciais Baileys salvas no banco. Em dev cai num default
+  // determinístico; em prod precisa ser configurada.
+  WHATSAPP_ENCRYPTION_KEY: z
+    .string()
+    .default('00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff'),
 });
 
 export const env = envSchema.parse(process.env);
