@@ -235,41 +235,6 @@ export function Sidebar({
           gap: 2,
         }}
       >
-        {!collapsed && (
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 10,
-              padding: '10px 10px',
-              borderRadius: 7,
-              background: t.bgHover,
-              marginBottom: 6,
-            }}
-          >
-            <div
-              style={{
-                width: 28,
-                height: 28,
-                borderRadius: 6,
-                background: t.goldFaint,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                flexShrink: 0,
-              }}
-            >
-              <Icons.Bolt s={14} c={t.gold} />
-            </div>
-            <div style={{ minWidth: 0, flex: 1 }}>
-              <div style={{ fontSize: 12, fontWeight: 500, color: t.text, marginBottom: 1 }}>
-                Plano Pro
-              </div>
-              <div style={{ fontSize: 10.5, color: t.textSubtle }}>842 de 2000 leads</div>
-            </div>
-          </div>
-        )}
-
         <NavButton
           item={{ path: '#help', label: 'Ajuda & Suporte', icon: 'Help' }}
           collapsed={collapsed}
