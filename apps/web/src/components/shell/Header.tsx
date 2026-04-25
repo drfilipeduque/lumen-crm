@@ -352,29 +352,6 @@ export function Header({
           flexShrink: 0,
         }}
       >
-        <button
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 6,
-            height: 32,
-            padding: '0 11px',
-            border: 'none',
-            background: t.gold,
-            color: '#0a0a0a',
-            borderRadius: 7,
-            fontSize: 12.5,
-            fontWeight: 600,
-            cursor: 'pointer',
-            fontFamily: 'inherit',
-            letterSpacing: -0.05,
-          }}
-          onMouseEnter={(e) => (e.currentTarget.style.background = t.goldHover)}
-          onMouseLeave={(e) => (e.currentTarget.style.background = t.gold)}
-        >
-          <Icons.Plus s={13} c="#0a0a0a" /> Novo lead
-        </button>
-        <div style={{ width: 1, height: 20, background: t.border, margin: '0 2px' }} />
         <ThemeToggle />
         <NotificationBell />
         <AvatarMenu />
