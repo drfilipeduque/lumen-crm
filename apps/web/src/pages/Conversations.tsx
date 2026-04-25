@@ -9,6 +9,7 @@ import { Modal } from '../components/ui/Modal';
 import { ConfirmDialog } from '../components/ui/ConfirmDialog';
 import { toast } from '../components/ui/Toast';
 import { OpportunityPopup } from '../components/opportunity/OpportunityPopup';
+import { createPortal } from 'react-dom';
 import {
   useConversation,
   useConversationMessages,
@@ -18,8 +19,10 @@ import {
   useMarkRead,
   useResolveConversation,
   useSendMessage,
+  useUploadConversationMedia,
   type ConversationListItem,
   type Message,
+  type SendMessageInput,
 } from '../hooks/useConversations';
 import { useTeam } from '../hooks/useTeam';
 import { useTags } from '../hooks/useTags';
@@ -980,19 +983,31 @@ function Bubble({ m, groupStart }: { m: Message; groupStart: boolean }) {
 
 function BubbleBody({ m }: { m: Message }) {
   const { tokens: t } = useTheme();
+  const [lightbox, setLightbox] = useState(false);
   if (m.type === 'TEXT') {
     return <span>{m.content ?? ''}</span>;
   }
-  // Mídia será expandida no próximo commit. Placeholder pra cada tipo.
   if (m.type === 'IMAGE') {
     return (
       <div>
         {m.mediaUrl ? (
-          <img
-            src={`/api${m.mediaUrl}`}
-            alt={m.content ?? ''}
-            style={{ maxWidth: 280, maxHeight: 280, borderRadius: 8, display: 'block' }}
-          />
+          <>
+            <img
+              src={`/api${m.mediaUrl}`}
+              alt={m.content ?? ''}
+              onClick={() => setLightbox(true)}
+              style={{
+                maxWidth: 280,
+                maxHeight: 280,
+                borderRadius: 8,
+                display: 'block',
+                cursor: 'zoom-in',
+              }}
+            />
+            {lightbox && (
+              <Lightbox src={`/api${m.mediaUrl}`} alt={m.content ?? ''} onClose={() => setLightbox(false)} />
+            )}
+          </>
         ) : (
           <span style={{ color: t.textSubtle, fontStyle: 'italic' }}>Baixando imagem…</span>
         )}
@@ -1080,14 +1095,29 @@ function Composer({
 }: {
   conversationId: string;
   disabled: boolean;
-  onSend: (input: { type: 'TEXT'; content: string }) => Promise<void>;
+  onSend: (input: SendMessageInput) => Promise<void>;
 }) {
   const { tokens: t } = useTheme();
   const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
+  const [attached, setAttached] = useState<{
+    type: 'IMAGE' | 'VIDEO' | 'AUDIO' | 'DOCUMENT';
+    url: string;
+    name: string;
+    mimeType: string;
+    size: number;
+    previewUrl?: string;
+  } | null>(null);
+  const [recording, setRecording] = useState(false);
+  const [attachOpen, setAttachOpen] = useState(false);
   const taRef = useRef<HTMLTextAreaElement>(null);
+  const fileImgRef = useRef<HTMLInputElement>(null);
+  const fileDocRef = useRef<HTMLInputElement>(null);
+  const fileVideoRef = useRef<HTMLInputElement>(null);
+  const upload = useUploadConversationMedia();
+  const attachRef = useRef<HTMLDivElement>(null);
+  useClickOutside(attachRef, () => setAttachOpen(false), attachOpen);
 
-  // auto-resize textarea
   useEffect(() => {
     const el = taRef.current;
     if (!el) return;
@@ -1095,24 +1125,87 @@ function Composer({
     el.style.height = Math.min(180, el.scrollHeight) + 'px';
   }, [text]);
 
-  // reset texto ao trocar de conversation
+  // reset ao trocar de conversa
   useEffect(() => {
     setText('');
+    setAttached(null);
+    setRecording(false);
   }, [conversationId]);
+
+  const pick = async (kind: 'image' | 'video' | 'document') => {
+    setAttachOpen(false);
+    const ref = kind === 'image' ? fileImgRef : kind === 'video' ? fileVideoRef : fileDocRef;
+    ref.current?.click();
+  };
+
+  const handleFile = async (file: File, kind: 'IMAGE' | 'VIDEO' | 'DOCUMENT') => {
+    try {
+      const r = await upload.mutateAsync({ id: conversationId, file });
+      const previewUrl = kind === 'IMAGE' ? URL.createObjectURL(file) : undefined;
+      setAttached({
+        type: kind,
+        url: r.url,
+        name: r.name,
+        mimeType: r.mimeType,
+        size: r.size,
+        previewUrl,
+      });
+    } catch (e) {
+      toast(axiosMsg(e) || 'Falha ao enviar arquivo', 'error');
+    }
+  };
+
+  const cancelAttachment = () => {
+    if (attached?.previewUrl) URL.revokeObjectURL(attached.previewUrl);
+    setAttached(null);
+  };
 
   const handleSend = async () => {
     const content = text.trim();
-    if (!content || sending) return;
+    if ((!content && !attached) || sending) return;
     setSending(true);
     try {
-      await onSend({ type: 'TEXT', content });
+      if (attached) {
+        await onSend({
+          type: attached.type,
+          content: content || null,
+          mediaUrl: attached.url,
+          mediaName: attached.name,
+          mediaMimeType: attached.mimeType,
+        });
+      } else {
+        await onSend({ type: 'TEXT', content });
+      }
       setText('');
+      cancelAttachment();
     } catch (e) {
       toast(axiosMsg(e) || 'Falha ao enviar', 'error');
     } finally {
       setSending(false);
     }
   };
+
+  const handleAudioReady = async (blob: Blob) => {
+    setRecording(false);
+    setSending(true);
+    try {
+      const file = new File([blob], `audio-${Date.now()}.webm`, { type: blob.type || 'audio/webm' });
+      const r = await upload.mutateAsync({ id: conversationId, file });
+      await onSend({
+        type: 'AUDIO',
+        content: null,
+        mediaUrl: r.url,
+        mediaName: r.name,
+        mediaMimeType: r.mimeType,
+      });
+    } catch (e) {
+      toast(axiosMsg(e) || 'Falha ao enviar áudio', 'error');
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const showSend = !!text.trim() || !!attached;
 
   return (
     <div
@@ -1128,77 +1221,427 @@ function Composer({
           ⚠️ Conexão WhatsApp não está ativa — não é possível enviar mensagens agora.
         </div>
       )}
+
+      {attached && (
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 10,
+            padding: 8,
+            background: t.bgInput,
+            border: `1px solid ${t.border}`,
+            borderRadius: 8,
+            marginBottom: 8,
+          }}
+        >
+          {attached.type === 'IMAGE' && attached.previewUrl ? (
+            <img
+              src={attached.previewUrl}
+              alt=""
+              style={{ width: 48, height: 48, objectFit: 'cover', borderRadius: 6 }}
+            />
+          ) : (
+            <div
+              style={{
+                width: 48,
+                height: 48,
+                borderRadius: 6,
+                background: t.bg,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              {attached.type === 'DOCUMENT' && <Icons.File s={20} c={t.gold} />}
+              {attached.type === 'VIDEO' && <Icons.Play s={20} c={t.gold} />}
+              {attached.type === 'AUDIO' && <Icons.Mic s={20} c={t.gold} />}
+            </div>
+          )}
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 12.5, color: t.text, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              {attached.name}
+            </div>
+            <div style={{ fontSize: 10.5, color: t.textFaint }}>{prettyBytes(attached.size)}</div>
+          </div>
+          <button type="button" onClick={cancelAttachment} aria-label="Remover" style={iconButton(t)}>
+            <Icons.X s={14} c={t.textDim} />
+          </button>
+        </div>
+      )}
+
+      {recording ? (
+        <AudioRecorderBar
+          onCancel={() => setRecording(false)}
+          onReady={handleAudioReady}
+        />
+      ) : (
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'flex-end',
+            gap: 6,
+            background: t.bgInput,
+            border: `1px solid ${t.border}`,
+            borderRadius: 12,
+            padding: '6px 8px',
+          }}
+        >
+          <div ref={attachRef} style={{ position: 'relative' }}>
+            <button
+              type="button"
+              title="Anexar"
+              onClick={() => setAttachOpen((v) => !v)}
+              disabled={disabled || upload.isPending}
+              style={{ ...iconButton(t), opacity: disabled ? 0.4 : 1 }}
+            >
+              <Icons.Paperclip s={16} c={t.textDim} />
+            </button>
+            {attachOpen && (
+              <div
+                style={{
+                  position: 'absolute',
+                  bottom: 38,
+                  left: 0,
+                  background: t.bgElevated,
+                  border: `1px solid ${t.border}`,
+                  borderRadius: 8,
+                  boxShadow: '0 12px 32px rgba(0,0,0,0.25)',
+                  padding: 4,
+                  minWidth: 170,
+                  zIndex: 20,
+                }}
+              >
+                <ActionRow icon={<Icons.Image s={13} c="currentColor" />} label="Imagem" onClick={() => pick('image')} />
+                <ActionRow icon={<Icons.Play s={13} c="currentColor" />} label="Vídeo" onClick={() => pick('video')} />
+                <ActionRow icon={<Icons.File s={13} c="currentColor" />} label="Documento" onClick={() => pick('document')} />
+              </div>
+            )}
+          </div>
+
+          <input
+            ref={fileImgRef}
+            type="file"
+            accept="image/*"
+            hidden
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (f) void handleFile(f, 'IMAGE');
+              e.target.value = '';
+            }}
+          />
+          <input
+            ref={fileVideoRef}
+            type="file"
+            accept="video/*"
+            hidden
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (f) void handleFile(f, 'VIDEO');
+              e.target.value = '';
+            }}
+          />
+          <input
+            ref={fileDocRef}
+            type="file"
+            accept="application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/plain,text/csv,application/zip,application/octet-stream"
+            hidden
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (f) void handleFile(f, 'DOCUMENT');
+              e.target.value = '';
+            }}
+          />
+
+          <textarea
+            ref={taRef}
+            rows={1}
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                void handleSend();
+              }
+            }}
+            placeholder={disabled ? 'Conexão offline' : attached ? 'Adicione uma legenda…' : 'Digite uma mensagem…'}
+            disabled={disabled || sending}
+            style={{
+              flex: 1,
+              border: 'none',
+              background: 'transparent',
+              outline: 'none',
+              resize: 'none',
+              color: t.text,
+              fontSize: 13,
+              fontFamily: FONT_STACK,
+              lineHeight: 1.4,
+              padding: '6px 4px',
+              maxHeight: 180,
+            }}
+          />
+
+          {showSend ? (
+            <button
+              type="button"
+              onClick={handleSend}
+              disabled={disabled || sending}
+              title="Enviar"
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                width: 34,
+                height: 34,
+                border: 'none',
+                borderRadius: 8,
+                background: t.gold,
+                color: '#1a1300',
+                cursor: 'pointer',
+                opacity: sending ? 0.6 : 1,
+              }}
+            >
+              <Icons.Send s={15} c="#1a1300" />
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setRecording(true)}
+              disabled={disabled}
+              title="Gravar áudio"
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                width: 34,
+                height: 34,
+                border: 'none',
+                borderRadius: 8,
+                background: t.bgInput,
+                color: t.textDim,
+                cursor: disabled ? 'not-allowed' : 'pointer',
+                opacity: disabled ? 0.4 : 1,
+              }}
+            >
+              <Icons.Mic s={15} c={t.textDim} />
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ============================================================
+// AUDIO RECORDER
+// ============================================================
+
+function AudioRecorderBar({
+  onCancel,
+  onReady,
+}: {
+  onCancel: () => void;
+  onReady: (blob: Blob) => void;
+}) {
+  const { tokens: t } = useTheme();
+  const recorderRef = useRef<MediaRecorder | null>(null);
+  const chunksRef = useRef<Blob[]>([]);
+  const streamRef = useRef<MediaStream | null>(null);
+  const startedAtRef = useRef<number>(Date.now());
+  const [elapsed, setElapsed] = useState(0);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [previewBlob, setPreviewBlob] = useState<Blob | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  // Inicia gravação
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        if (cancelled) {
+          stream.getTracks().forEach((t) => t.stop());
+          return;
+        }
+        streamRef.current = stream;
+        const mime =
+          MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+            ? 'audio/webm;codecs=opus'
+            : MediaRecorder.isTypeSupported('audio/ogg;codecs=opus')
+              ? 'audio/ogg;codecs=opus'
+              : '';
+        const mr = mime ? new MediaRecorder(stream, { mimeType: mime }) : new MediaRecorder(stream);
+        recorderRef.current = mr;
+        chunksRef.current = [];
+        mr.ondataavailable = (ev) => {
+          if (ev.data.size > 0) chunksRef.current.push(ev.data);
+        };
+        mr.onstop = () => {
+          const blob = new Blob(chunksRef.current, { type: mr.mimeType || 'audio/webm' });
+          setPreviewBlob(blob);
+          setPreviewUrl(URL.createObjectURL(blob));
+        };
+        mr.start();
+        startedAtRef.current = Date.now();
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : 'Falha ao acessar microfone';
+        setError(msg);
+      }
+    })();
+    return () => {
+      cancelled = true;
+      const mr = recorderRef.current;
+      if (mr && mr.state !== 'inactive') {
+        try {
+          mr.stop();
+        } catch {
+          /* ignore */
+        }
+      }
+      streamRef.current?.getTracks().forEach((t) => t.stop());
+      streamRef.current = null;
+    };
+  }, []);
+
+  // Timer
+  useEffect(() => {
+    if (previewUrl) return;
+    const id = setInterval(() => {
+      setElapsed(Math.floor((Date.now() - startedAtRef.current) / 1000));
+    }, 250);
+    return () => clearInterval(id);
+  }, [previewUrl]);
+
+  // Limpeza de URL ao desmontar
+  useEffect(() => {
+    return () => {
+      if (previewUrl) URL.revokeObjectURL(previewUrl);
+    };
+  }, [previewUrl]);
+
+  const stopRecording = () => {
+    const mr = recorderRef.current;
+    if (mr && mr.state !== 'inactive') {
+      mr.stop();
+    }
+    streamRef.current?.getTracks().forEach((t) => t.stop());
+    streamRef.current = null;
+  };
+
+  const handleSend = () => {
+    if (!previewBlob) return;
+    onReady(previewBlob);
+  };
+
+  if (error) {
+    return (
       <div
         style={{
           display: 'flex',
-          alignItems: 'flex-end',
-          gap: 8,
+          alignItems: 'center',
+          gap: 10,
           background: t.bgInput,
-          border: `1px solid ${t.border}`,
+          border: `1px solid ${t.danger}`,
           borderRadius: 12,
-          padding: '6px 8px',
+          padding: '8px 12px',
+          fontSize: 12,
+          color: t.danger,
         }}
       >
-        <button
-          type="button"
-          title="Anexar (em breve)"
-          disabled
-          style={{ ...iconButton(t), opacity: 0.4 }}
-        >
-          <Icons.Paperclip s={16} c={t.textDim} />
-        </button>
-        <textarea
-          ref={taRef}
-          rows={1}
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' && !e.shiftKey) {
-              e.preventDefault();
-              void handleSend();
-            }
-          }}
-          placeholder={disabled ? 'Conexão offline' : 'Digite uma mensagem…'}
-          disabled={disabled || sending}
-          style={{
-            flex: 1,
-            border: 'none',
-            background: 'transparent',
-            outline: 'none',
-            resize: 'none',
-            color: t.text,
-            fontSize: 13,
-            fontFamily: FONT_STACK,
-            lineHeight: 1.4,
-            padding: '6px 4px',
-            maxHeight: 180,
-          }}
-        />
-        <button
-          type="button"
-          onClick={handleSend}
-          disabled={disabled || sending || !text.trim()}
-          title="Enviar"
-          style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            width: 34,
-            height: 34,
-            border: 'none',
-            borderRadius: 8,
-            background: text.trim() && !disabled ? t.gold : t.bgInput,
-            color: text.trim() && !disabled ? '#1a1300' : t.textFaint,
-            cursor: text.trim() && !disabled ? 'pointer' : 'not-allowed',
-            transition: 'background 120ms ease',
-            opacity: sending ? 0.6 : 1,
-          }}
-        >
-          <Icons.Send s={15} c={text.trim() && !disabled ? '#1a1300' : t.textFaint} />
+        <span style={{ flex: 1 }}>⚠️ {error}</span>
+        <button type="button" onClick={onCancel} style={iconButton(t)}>
+          <Icons.X s={14} c={t.textDim} />
         </button>
       </div>
+    );
+  }
+
+  return (
+    <div
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 10,
+        background: t.bgInput,
+        border: `1px solid ${t.border}`,
+        borderRadius: 12,
+        padding: '6px 8px 6px 12px',
+      }}
+    >
+      <button type="button" onClick={onCancel} title="Cancelar" style={iconButton(t)}>
+        <Icons.Trash s={14} c={t.danger} />
+      </button>
+
+      {previewUrl ? (
+        <>
+          <audio src={previewUrl} controls style={{ flex: 1, height: 32 }} />
+          <button
+            type="button"
+            onClick={handleSend}
+            title="Enviar áudio"
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              width: 34,
+              height: 34,
+              border: 'none',
+              borderRadius: 8,
+              background: t.gold,
+              color: '#1a1300',
+              cursor: 'pointer',
+            }}
+          >
+            <Icons.Send s={15} c="#1a1300" />
+          </button>
+        </>
+      ) : (
+        <>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+            <span
+              style={{
+                width: 8,
+                height: 8,
+                borderRadius: 999,
+                background: t.danger,
+                animation: 'lumen-rec 1s ease-in-out infinite',
+              }}
+            />
+            <span style={{ fontSize: 12, color: t.text, fontVariantNumeric: 'tabular-nums' }}>
+              {formatDuration(elapsed)}
+            </span>
+          </span>
+          <span style={{ flex: 1, fontSize: 11, color: t.textSubtle }}>Gravando…</span>
+          <button
+            type="button"
+            onClick={stopRecording}
+            title="Parar"
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              width: 34,
+              height: 34,
+              border: 'none',
+              borderRadius: 8,
+              background: t.gold,
+              color: '#1a1300',
+              cursor: 'pointer',
+            }}
+          >
+            <Icons.Check s={15} c="#1a1300" />
+          </button>
+        </>
+      )}
+      <style>{`@keyframes lumen-rec { 0%, 100% { opacity: 1 } 50% { opacity: 0.3 } }`}</style>
     </div>
   );
+}
+
+function formatDuration(sec: number): string {
+  const m = Math.floor(sec / 60);
+  const s = sec % 60;
+  return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
 }
 
 // ============================================================
@@ -1800,4 +2243,78 @@ function labelHistoryAction(action: string): string {
 
 function axiosMsg(e: unknown): string | null {
   return axios.isAxiosError(e) ? (e.response?.data?.message ?? null) : null;
+}
+
+// ============================================================
+// LIGHTBOX
+// ============================================================
+
+function Lightbox({ src, alt, onClose }: { src: string; alt: string; onClose: () => void }) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    document.addEventListener('keydown', onKey);
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      document.body.style.overflow = prev;
+    };
+  }, [onClose]);
+
+  return createPortal(
+    <div
+      onClick={onClose}
+      role="dialog"
+      aria-modal="true"
+      aria-label="Visualizar imagem"
+      style={{
+        position: 'fixed',
+        inset: 0,
+        background: 'rgba(0,0,0,0.85)',
+        zIndex: 100,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        cursor: 'zoom-out',
+      }}
+    >
+      <button
+        type="button"
+        onClick={onClose}
+        aria-label="Fechar"
+        style={{
+          position: 'absolute',
+          top: 16,
+          right: 16,
+          width: 36,
+          height: 36,
+          borderRadius: '50%',
+          background: 'rgba(255,255,255,0.12)',
+          border: 'none',
+          color: '#fff',
+          cursor: 'pointer',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+      >
+        <Icons.X s={18} c="#fff" />
+      </button>
+      <img
+        src={src}
+        alt={alt}
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          maxWidth: '92vw',
+          maxHeight: '92vh',
+          objectFit: 'contain',
+          borderRadius: 8,
+          cursor: 'default',
+        }}
+      />
+    </div>,
+    document.body,
+  );
 }
