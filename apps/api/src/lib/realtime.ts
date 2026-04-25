@@ -39,7 +39,16 @@ export function initRealtime(app: FastifyInstance, allowedOrigins: string[]) {
 export type RealtimeEventMap = {
   'reminder:due': { id: string; title: string; opportunityId: string };
   'message:new': { conversationId: string; messageId: string; contactId: string };
+  'message:status': {
+    conversationId: string;
+    messageId: string;
+    status: 'SENT' | 'DELIVERED' | 'READ' | 'FAILED';
+  };
   'conversation:update': { conversationId: string };
+  'typing': {
+    conversationId: string;
+    state: 'composing' | 'recording' | 'paused';
+  };
   'whatsapp:connection-update': {
     connectionId: string;
     status: string;

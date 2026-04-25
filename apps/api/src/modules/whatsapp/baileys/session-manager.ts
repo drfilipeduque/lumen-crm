@@ -153,6 +153,114 @@ export async function startSession(connectionId: string): Promise<void> {
   socket.ev.on('messages.upsert', (event: Parameters<typeof handleIncomingMessages>[1]) => {
     void handleIncomingMessages(connectionId, event);
   });
+
+  socket.ev.on('messages.update', (updates) => {
+    void handleMessageStatusUpdates(connectionId, updates);
+  });
+
+  socket.ev.on('presence.update', (event) => {
+    void handlePresenceUpdate(connectionId, event);
+  });
+}
+
+async function handleMessageStatusUpdates(
+  connectionId: string,
+  updates: { update: { status?: number | null }; key: { id?: string | null; remoteJid?: string | null } }[],
+) {
+  for (const u of updates) {
+    const externalId = u.key.id;
+    const rawStatus = u.update.status;
+    if (!externalId || rawStatus == null) continue;
+
+    let status: 'SENT' | 'DELIVERED' | 'READ' | 'FAILED';
+    if (rawStatus === 0) status = 'FAILED';
+    else if (rawStatus === 1 || rawStatus === 2) status = 'SENT';
+    else if (rawStatus === 3) status = 'DELIVERED';
+    else if (rawStatus === 4 || rawStatus === 5) status = 'READ';
+    else continue;
+
+    try {
+      const msg = await prisma.message.findFirst({
+        where: { externalId },
+        select: {
+          id: true,
+          conversationId: true,
+          conversation: { select: { connectionId: true, assigneeId: true } },
+        },
+      });
+      if (!msg || msg.conversation.connectionId !== connectionId) continue;
+
+      const data: { status: typeof status; deliveredAt?: Date; readAt?: Date } = { status };
+      if (status === 'DELIVERED') data.deliveredAt = new Date();
+      if (status === 'READ') data.readAt = new Date();
+      await prisma.message.update({ where: { id: msg.id }, data });
+
+      await broadcastToConnection(connectionId, msg.conversation.assigneeId, 'message:status', {
+        conversationId: msg.conversationId,
+        messageId: msg.id,
+        status,
+      });
+    } catch (e) {
+      console.error('[whatsapp/status] update failed', e);
+    }
+  }
+}
+
+async function handlePresenceUpdate(
+  connectionId: string,
+  event: { id: string; presences: Record<string, { lastKnownPresence?: string }> },
+) {
+  // event.id é o jid do chat (1:1 ou grupo). Pegamos a presence do próprio jid.
+  const jid = event.id;
+  if (!jid || jid.endsWith('@g.us')) return;
+  const phoneRaw = jid.split('@')[0]?.split(':')[0] ?? '';
+  if (!phoneRaw) return;
+
+  const presence = event.presences[jid]?.lastKnownPresence;
+  if (!presence) return;
+  if (presence !== 'composing' && presence !== 'recording' && presence !== 'paused') return;
+
+  // Encontra a conversation correspondente
+  const contact = await prisma.contact.findFirst({
+    where: { phone: { in: [phoneRaw, `+${phoneRaw}`] } },
+    select: { id: true },
+  });
+  if (!contact) return;
+  const conv = await prisma.conversation.findUnique({
+    where: { contactId_connectionId: { contactId: contact.id, connectionId } },
+    select: { id: true, assigneeId: true },
+  });
+  if (!conv) return;
+
+  await broadcastToConnection(connectionId, conv.assigneeId, 'typing', {
+    conversationId: conv.id,
+    state: presence,
+  });
+}
+
+async function broadcastToConnection<E extends 'message:status' | 'typing'>(
+  connectionId: string,
+  assigneeId: string | null,
+  event: E,
+  payload: E extends 'message:status'
+    ? { conversationId: string; messageId: string; status: 'SENT' | 'DELIVERED' | 'READ' | 'FAILED' }
+    : { conversationId: string; state: 'composing' | 'recording' | 'paused' },
+) {
+  const targets = new Set<string>();
+  if (assigneeId) targets.add(assigneeId);
+  const links = await prisma.userWhatsAppConnection.findMany({
+    where: { connectionId },
+    select: { userId: true },
+  });
+  for (const l of links) targets.add(l.userId);
+  const admins = await prisma.user.findMany({
+    where: { role: 'ADMIN', active: true },
+    select: { id: true },
+  });
+  for (const a of admins) targets.add(a.id);
+  for (const userId of targets) {
+    emitToUser(userId, event, payload as never);
+  }
 }
 
 export async function stopSession(connectionId: string): Promise<void> {
