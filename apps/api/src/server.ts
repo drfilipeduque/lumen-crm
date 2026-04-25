@@ -23,6 +23,7 @@ import {
   whatsappEntryRulesRoutes,
 } from './modules/whatsapp/connections.routes.js';
 import { conversationMessagesRoutes } from './modules/whatsapp/messages.routes.js';
+import { conversationsRoutes } from './modules/whatsapp/conversations.routes.js';
 import { restoreAllSessions } from './modules/whatsapp/baileys/session-manager.js';
 
 const app = Fastify({
@@ -71,6 +72,7 @@ await app.register(filesRoutes, { prefix: '/files' });
 await app.register(remindersRoutes, { prefix: '/reminders' });
 await app.register(whatsappConnectionsRoutes, { prefix: '/whatsapp/connections' });
 await app.register(whatsappEntryRulesRoutes, { prefix: '/whatsapp/entry-rules' });
+await app.register(conversationsRoutes, { prefix: '/conversations' });
 await app.register(conversationMessagesRoutes, { prefix: '/conversations' });
 
 try {
