@@ -4,7 +4,7 @@ import {
 } from '@whiskeysockets/baileys';
 import { prisma, type Prisma } from '../../../lib/prisma.js';
 import { emitToUser } from '../../../lib/realtime.js';
-import { normalizePhone, formatPhoneBR } from '../../../lib/phone.js';
+import { formatPhoneBR, normalizePhone, phoneVariants } from '../../../lib/phone.js';
 import { getSocket } from './session-manager.js';
 import {
   downloadIncomingMedia,
@@ -57,9 +57,10 @@ async function processOne(connectionId: string, msg: WAMessage) {
 
   const { type, content, mediaUrl } = extractContent(msg);
 
-  // Encontra/cria contato
+  // Encontra/cria contato — usa phoneVariants pra cobrir o "9 problem"
+  // do BR e variantes com/sem prefixo 55.
   let contact = await prisma.contact.findFirst({
-    where: { phone: { in: [phone, `+${phone}`] } },
+    where: { phone: { in: phoneVariants(phone) } },
     select: { id: true, ownerId: true, name: true },
   });
   let isNewContact = false;

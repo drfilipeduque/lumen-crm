@@ -11,6 +11,7 @@ import { prisma } from '../../../lib/prisma.js';
 import { emitToUser } from '../../../lib/realtime.js';
 import { useDBAuthState } from './auth-state.js';
 import { handleIncomingMessages } from './message.service.js';
+import { normalizePhone, phoneVariants } from '../../../lib/phone.js';
 
 // Logger no-op pra não obrigar pino como dep direta
 type NoopLogger = {
@@ -214,7 +215,8 @@ async function handlePresenceUpdate(
   const jid = event.id;
   if (!jid || jid.endsWith('@g.us')) return;
   const phoneRaw = jid.split('@')[0]?.split(':')[0] ?? '';
-  if (!phoneRaw) return;
+  const phone = normalizePhone(phoneRaw);
+  if (!phone) return;
 
   const presence = event.presences[jid]?.lastKnownPresence;
   if (!presence) return;
@@ -222,7 +224,7 @@ async function handlePresenceUpdate(
 
   // Encontra a conversation correspondente
   const contact = await prisma.contact.findFirst({
-    where: { phone: { in: [phoneRaw, `+${phoneRaw}`] } },
+    where: { phone: { in: phoneVariants(phone) } },
     select: { id: true },
   });
   if (!contact) return;
