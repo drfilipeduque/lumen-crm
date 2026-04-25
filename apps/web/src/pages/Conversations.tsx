@@ -28,6 +28,7 @@ import { useTeam } from '../hooks/useTeam';
 import { useTags } from '../hooks/useTags';
 import { useWhatsAppConnections } from '../hooks/useWhatsApp';
 import { usePipeline, usePipelines } from '../hooks/usePipelines';
+import { useSocketEvent } from '../hooks/useSocketIO';
 
 // ============================================================
 // PAGE
@@ -492,6 +493,33 @@ function ChatArea({ conversationId, onClose }: { conversationId: string; onClose
   const me = useAuthStore((s) => s.user);
   const markRead = useMarkRead();
   const send = useSendMessage();
+  const [typing, setTyping] = useState(false);
+  const typingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useSocketEvent<{ conversationId: string; state: 'composing' | 'recording' | 'paused' }>(
+    'typing',
+    (payload) => {
+      if (payload.conversationId !== conversationId) return;
+      if (payload.state === 'paused') {
+        setTyping(false);
+        return;
+      }
+      setTyping(true);
+      if (typingTimerRef.current) clearTimeout(typingTimerRef.current);
+      typingTimerRef.current = setTimeout(() => setTyping(false), 4000);
+    },
+  );
+
+  useEffect(() => {
+    return () => {
+      if (typingTimerRef.current) clearTimeout(typingTimerRef.current);
+    };
+  }, []);
+
+  // Reset typing ao trocar de conversa
+  useEffect(() => {
+    setTyping(false);
+  }, [conversationId]);
 
   // Marca como lida ao abrir e quando chega nova msg
   useEffect(() => {
@@ -536,6 +564,7 @@ function ChatArea({ conversationId, onClose }: { conversationId: string; onClose
           loadOlder={() => messages.fetchNextPage()}
           hasMore={!!messages.hasNextPage}
           loadingOlder={messages.isFetchingNextPage}
+          typing={typing}
         />
         <Composer
           conversationId={conversationId}
@@ -801,11 +830,13 @@ function MessagesView({
   loadOlder,
   hasMore,
   loadingOlder,
+  typing,
 }: {
   messages: Message[];
   loadOlder: () => void;
   hasMore: boolean;
   loadingOlder: boolean;
+  typing?: boolean;
 }) {
   const { tokens: t } = useTheme();
   const containerRef = useRef<HTMLDivElement>(null);
@@ -896,6 +927,8 @@ function MessagesView({
         ))
       )}
 
+      {typing && <TypingIndicator />}
+
       {showScrollButton && (
         <button
           type="button"
@@ -925,6 +958,50 @@ function MessagesView({
         </button>
       )}
     </div>
+  );
+}
+
+function TypingIndicator() {
+  const { tokens: t } = useTheme();
+  return (
+    <div style={{ display: 'flex', justifyContent: 'flex-start', marginTop: 8 }}>
+      <div
+        style={{
+          padding: '8px 14px',
+          background: t.bgElevated,
+          border: `1px solid ${t.border}`,
+          borderRadius: 12,
+          color: t.textDim,
+          fontSize: 11.5,
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: 8,
+        }}
+      >
+        <span>digitando</span>
+        <span style={{ display: 'inline-flex', gap: 3 }}>
+          <Dot d="0s" />
+          <Dot d="0.15s" />
+          <Dot d="0.3s" />
+        </span>
+        <style>{`@keyframes lumen-typing { 0%, 80%, 100% { opacity: 0.3 } 40% { opacity: 1 } }`}</style>
+      </div>
+    </div>
+  );
+}
+
+function Dot({ d }: { d: string }) {
+  const { tokens: t } = useTheme();
+  return (
+    <span
+      style={{
+        width: 4,
+        height: 4,
+        borderRadius: 999,
+        background: t.textDim,
+        animation: `lumen-typing 1.2s ease-in-out ${d} infinite`,
+      }}
+    />
   );
 }
 
