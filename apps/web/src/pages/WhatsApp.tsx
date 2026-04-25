@@ -426,17 +426,9 @@ function ConnectionCard({
 // NEW CONNECTION MODAL
 // ============================================================
 
-function ConnectionAvatar({
-  avatar,
-  status,
-}: {
-  avatar: string | null;
-  status: WAConnection['status'];
-}) {
-  const { tokens: t } = useTheme();
+function ConnectionAvatar({ avatar }: { avatar: string | null; status: WAConnection['status'] }) {
   const [loadFailed, setLoadFailed] = useState(false);
   const showImage = !!avatar && !loadFailed;
-  const isConnected = status === 'CONNECTED';
 
   useEffect(() => {
     setLoadFailed(false);
@@ -445,7 +437,6 @@ function ConnectionAvatar({
   return (
     <div
       style={{
-        position: 'relative',
         width: 44,
         height: 44,
         borderRadius: 12,
@@ -468,21 +459,6 @@ function ConnectionAvatar({
         />
       ) : (
         <Icons.Phone s={20} c="currentColor" />
-      )}
-      {isConnected && (
-        <span
-          title="Conectado"
-          style={{
-            position: 'absolute',
-            bottom: -2,
-            right: -2,
-            width: 14,
-            height: 14,
-            borderRadius: '50%',
-            background: t.success,
-            border: `2px solid ${t.bgElevated}`,
-          }}
-        />
       )}
     </div>
   );
