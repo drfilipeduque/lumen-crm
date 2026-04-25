@@ -204,6 +204,75 @@ export const Icons = {
       <path d="M18 6 6 18M6 6l12 12" />
     </svg>
   ),
+
+  // Conversations
+  Send: ({ s = 16, c, ...rest }: IconProps) => (
+    <svg {...baseProps(s, c)} {...rest}>
+      <path d="m22 2-7 20-4-9-9-4 20-7Z" />
+    </svg>
+  ),
+  Mic: ({ s = 16, c, ...rest }: IconProps) => (
+    <svg {...baseProps(s, c)} {...rest}>
+      <rect x="9" y="2" width="6" height="12" rx="3" />
+      <path d="M19 11a7 7 0 0 1-14 0M12 18v4M8 22h8" />
+    </svg>
+  ),
+  Image: ({ s = 16, c, ...rest }: IconProps) => (
+    <svg {...baseProps(s, c)} {...rest}>
+      <rect x="3" y="3" width="18" height="18" rx="2" />
+      <circle cx="9" cy="9" r="2" />
+      <path d="m21 15-5-5L5 21" />
+    </svg>
+  ),
+  Paperclip: ({ s = 16, c, ...rest }: IconProps) => (
+    <svg {...baseProps(s, c)} {...rest}>
+      <path d="M21.4 11 12 20.5a6 6 0 0 1-8.5-8.5l9.5-9.5a4 4 0 0 1 5.7 5.7L8.7 17.7a2 2 0 0 1-2.8-2.8L14.5 6.3" />
+    </svg>
+  ),
+  File: ({ s = 16, c, ...rest }: IconProps) => (
+    <svg {...baseProps(s, c)} {...rest}>
+      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+      <path d="M14 2v6h6M9 13h6M9 17h6" />
+    </svg>
+  ),
+  Play: ({ s = 16, c, ...rest }: IconProps) => (
+    <svg {...baseProps(s, c)} {...rest}>
+      <path d="M6 4v16l13-8z" fill={c} />
+    </svg>
+  ),
+  Pause: ({ s = 16, c, ...rest }: IconProps) => (
+    <svg {...baseProps(s, c)} {...rest}>
+      <rect x="6" y="4" width="4" height="16" rx="1" fill={c} />
+      <rect x="14" y="4" width="4" height="16" rx="1" fill={c} />
+    </svg>
+  ),
+  Download: ({ s = 16, c, ...rest }: IconProps) => (
+    <svg {...baseProps(s, c)} {...rest}>
+      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3" />
+    </svg>
+  ),
+  MoreH: ({ s = 16, c, ...rest }: IconProps) => (
+    <svg {...baseProps(s, c)} {...rest}>
+      <circle cx="5" cy="12" r="1" />
+      <circle cx="12" cy="12" r="1" />
+      <circle cx="19" cy="12" r="1" />
+    </svg>
+  ),
+  Filter: ({ s = 16, c, ...rest }: IconProps) => (
+    <svg {...baseProps(s, c)} {...rest}>
+      <path d="M22 3H2l8 9.5V19l4 2v-8.5L22 3z" />
+    </svg>
+  ),
+  ArrowDown: ({ s = 16, c, ...rest }: IconProps) => (
+    <svg {...baseProps(s, c)} {...rest}>
+      <path d="M12 5v14M19 12l-7 7-7-7" />
+    </svg>
+  ),
+  CheckCheck: ({ s = 16, c, ...rest }: IconProps) => (
+    <svg {...baseProps(s, c)} {...rest}>
+      <path d="M2 13l4 4 8-8M10 13l4 4 8-12" />
+    </svg>
+  ),
 };
 
 export type IconName = keyof typeof Icons;

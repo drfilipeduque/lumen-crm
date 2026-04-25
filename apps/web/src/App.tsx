@@ -8,6 +8,7 @@ import { LeadsPage } from './pages/Leads';
 import { PipelinePage } from './pages/Pipeline';
 import { RemindersPage } from './pages/Reminders';
 import { WhatsAppPage } from './pages/WhatsApp';
+import { ConversationsPage } from './pages/Conversations';
 import { PagePlaceholder } from './pages/PagePlaceholder';
 import { SettingsLayout } from './pages/settings/SettingsLayout';
 import { SettingsSection } from './pages/settings/SettingsSection';
@@ -42,7 +43,7 @@ export function App() {
               <Route index element={<Navigate to="/dashboard" replace />} />
               <Route path="/dashboard" element={<DashboardPage />} />
               <Route path="/pipeline" element={<PipelinePage />} />
-              <Route path="/conversations" element={<PagePlaceholder title="Conversas" icon="Chat" />} />
+              <Route path="/conversations" element={<ConversationsPage />} />
               <Route path="/leads" element={<LeadsPage />} />
               <Route path="/reminders" element={<RemindersPage />} />
               <Route path="/automations" element={<PagePlaceholder title="Automações" icon="Bolt" />} />
