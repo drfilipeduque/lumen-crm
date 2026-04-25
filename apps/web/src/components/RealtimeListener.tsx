@@ -6,6 +6,13 @@ import { toast } from './ui/Toast';
 
 type ReminderDuePayload = { id: string; title: string; opportunityId: string };
 type WAConnectionUpdate = { connectionId: string; status: string; qr?: string; phone?: string | null };
+type MessageNew = { conversationId: string; messageId: string; contactId: string };
+type MessageStatus = {
+  conversationId: string;
+  messageId: string;
+  status: 'SENT' | 'DELIVERED' | 'READ' | 'FAILED';
+};
+type ConversationUpdate = { conversationId: string };
 
 let beepCtx: AudioContext | null = null;
 function playBeep() {
@@ -56,6 +63,34 @@ export function RealtimeListener() {
     if (payload.status === 'CONNECTED') {
       toast(`📱 WhatsApp conectado${payload.phone ? ` (${payload.phone})` : ''}`, 'success');
     }
+  });
+
+  useSocketEvent<MessageNew>('message:new', (payload) => {
+    qc.invalidateQueries({ queryKey: ['conversations-list'] });
+    qc.invalidateQueries({ queryKey: ['conversations-unread-total'] });
+    qc.invalidateQueries({ queryKey: ['conversation-detail', payload.conversationId] });
+    qc.invalidateQueries({ queryKey: ['conversation-messages', payload.conversationId] });
+    qc.invalidateQueries({ queryKey: ['board'] });
+
+    // Som apenas se a tab não está focada na conversa em questão
+    const onConversationsPage = window.location.pathname === '/conversations';
+    const params = new URLSearchParams(window.location.search);
+    const focusedId = params.get('id');
+    const isFocused = onConversationsPage && focusedId === payload.conversationId;
+    if (!isFocused) {
+      const prefs = (user?.preferences ?? {}) as { notifications?: { sound?: boolean } };
+      if (prefs.notifications?.sound !== false) playBeep();
+    }
+  });
+
+  useSocketEvent<MessageStatus>('message:status', (payload) => {
+    qc.invalidateQueries({ queryKey: ['conversation-messages', payload.conversationId] });
+  });
+
+  useSocketEvent<ConversationUpdate>('conversation:update', (payload) => {
+    qc.invalidateQueries({ queryKey: ['conversations-list'] });
+    qc.invalidateQueries({ queryKey: ['conversations-unread-total'] });
+    qc.invalidateQueries({ queryKey: ['conversation-detail', payload.conversationId] });
   });
 
   useSocketEvent<ReminderDuePayload>('reminder:due', (payload) => {

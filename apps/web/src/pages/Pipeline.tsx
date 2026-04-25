@@ -1294,6 +1294,7 @@ function OpportunityCard({
   onClick?: () => void;
 }) {
   const { tokens: t } = useTheme();
+  const navigate = useNavigate();
   const [hover, setHover] = useState(false);
   const [reminderOpen, setReminderOpen] = useState(false);
 
@@ -1409,9 +1410,28 @@ function OpportunityCard({
         <span>há {daysAgo(card.lastActivity)}d</span>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           {card.unreadMessages > 0 && (
-            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, color: t.gold }}>
+            <button
+              type="button"
+              title="Abrir conversa"
+              onClick={(e) => {
+                e.stopPropagation();
+                navigate(`/conversations?contactId=${card.contactId}`);
+              }}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 3,
+                color: t.gold,
+                background: 'transparent',
+                border: 'none',
+                padding: 0,
+                cursor: 'pointer',
+                fontSize: 'inherit',
+                fontFamily: 'inherit',
+              }}
+            >
               💬 {card.unreadMessages}
-            </span>
+            </button>
           )}
           {card.hasActiveReminder && (
             <span

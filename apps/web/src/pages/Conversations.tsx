@@ -47,6 +47,7 @@ export function ConversationsPage() {
   const [unreadOnly, setUnreadOnly] = useState(false);
   const [searchParams, setSearchParams] = useSearchParams();
   const selectedId = searchParams.get('id');
+  const requestedContactId = searchParams.get('contactId');
 
   // Debounce na busca
   useEffect(() => {
@@ -68,6 +69,19 @@ export function ConversationsPage() {
     search: debouncedSearch || undefined,
     limit: 50,
   });
+
+  // Resolve ?contactId=xxx pra ?id= da conversa correspondente
+  useEffect(() => {
+    if (!requestedContactId || selectedId) return;
+    const match = list.data?.data.find((c) => c.contactId === requestedContactId);
+    if (match) {
+      setSearchParams((prev) => {
+        prev.delete('contactId');
+        prev.set('id', match.id);
+        return prev;
+      });
+    }
+  }, [requestedContactId, selectedId, list.data, setSearchParams]);
 
   const handleSelect = (id: string) => {
     setSearchParams((prev) => {

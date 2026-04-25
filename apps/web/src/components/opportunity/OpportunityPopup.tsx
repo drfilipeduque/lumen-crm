@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { createPortal } from 'react-dom';
+import { useNavigate } from 'react-router-dom';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Placeholder from '@tiptap/extension-placeholder';
@@ -156,7 +157,7 @@ export function OpportunityPopup({
               {tab === 'arquivos' && <ArquivosTab opportunityId={opportunityId} />}
               {tab === 'historico' && <HistoricoTab opportunityId={opportunityId} />}
               {tab === 'lembretes' && <LembretesTab opportunityId={opportunityId} />}
-              {tab === 'conversas' && <ConversasTab />}
+              {tab === 'conversas' && <ConversasTab detail={detail.data} />}
             </div>
           </>
         )}
@@ -636,6 +637,7 @@ type OppDetail = NonNullable<ReturnType<typeof useOpportunity>['data']>;
 
 function GeralTab({ detail }: { detail: OppDetail }) {
   const { tokens: t } = useTheme();
+  const navigate = useNavigate();
   const pipeline = usePipeline(detail.pipelineId);
   const team = useTeam();
   const tagsQ = useTags();
@@ -750,7 +752,7 @@ function GeralTab({ detail }: { detail: OppDetail }) {
           </div>
           <button
             type="button"
-            onClick={() => toast('Integração com conversas em breve', 'info')}
+            onClick={() => navigate(`/conversations?contactId=${detail.contactId}`)}
             style={{ ...buttonGhost(t), padding: '6px 10px', fontSize: 11.5 }}
           >
             💬 Conversas
@@ -1902,8 +1904,9 @@ function CreateReminderModal({
 // CONVERSAS
 // ============================================================
 
-function ConversasTab() {
+function ConversasTab({ detail }: { detail: OppDetail }) {
   const { tokens: t } = useTheme();
+  const navigate = useNavigate();
   return (
     <div style={{ padding: 20 }}>
       <div
@@ -1920,8 +1923,29 @@ function ConversasTab() {
         <Icons.Chat s={28} c={t.gold} />
         <div style={{ marginTop: 12, fontWeight: 500, color: t.text }}>Conversas WhatsApp</div>
         <div style={{ marginTop: 6, fontSize: 12.5 }}>
-          As mensagens com este contato aparecerão aqui quando o módulo de WhatsApp estiver conectado.
+          As mensagens com este contato estão na página de Conversas em tempo real.
         </div>
+        <button
+          type="button"
+          onClick={() => navigate(`/conversations?contactId=${detail.contactId}`)}
+          style={{
+            marginTop: 14,
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 6,
+            background: t.gold,
+            color: '#1a1300',
+            border: 'none',
+            borderRadius: 8,
+            padding: '8px 14px',
+            fontSize: 12.5,
+            fontWeight: 600,
+            cursor: 'pointer',
+            fontFamily: FONT_STACK,
+          }}
+        >
+          💬 Ir pra Conversas
+        </button>
       </div>
     </div>
   );

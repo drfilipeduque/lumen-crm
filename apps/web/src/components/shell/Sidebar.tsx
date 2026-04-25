@@ -1,7 +1,9 @@
-import { useState, type CSSProperties } from 'react';
+import { useMemo, useState, type CSSProperties } from 'react';
 import { useMatch, useNavigate } from 'react-router-dom';
 import { useTheme } from '../../lib/ThemeContext';
 import { Icons, type IconName } from '../icons';
+import { useUnreadTotal } from '../../hooks/useConversations';
+import { usePendingCount } from '../../hooks/useReminders';
 
 export type NavItem = {
   path: string;
@@ -13,9 +15,9 @@ export type NavItem = {
 export const NAV_ITEMS: NavItem[] = [
   { path: '/dashboard', label: 'Dashboard', icon: 'Home' },
   { path: '/pipeline', label: 'Pipeline', icon: 'Pipeline' },
-  { path: '/conversations', label: 'Conversas', icon: 'Chat', badge: 12 },
+  { path: '/conversations', label: 'Conversas', icon: 'Chat' },
   { path: '/leads', label: 'Leads', icon: 'Users' },
-  { path: '/reminders', label: 'Lembretes', icon: 'Bell', badge: 3 },
+  { path: '/reminders', label: 'Lembretes', icon: 'Bell' },
   { path: '/automations', label: 'Automações', icon: 'Bolt' },
   { path: '/whatsapp', label: 'WhatsApp', icon: 'Phone' },
   { path: '/settings', label: 'Configurações', icon: 'Gear' },
@@ -167,6 +169,22 @@ export function Sidebar({
 }) {
   const { tokens: t } = useTheme();
   const width = collapsed ? 60 : 240;
+  const unread = useUnreadTotal();
+  const pendingReminders = usePendingCount();
+
+  const items = useMemo<NavItem[]>(
+    () =>
+      NAV_ITEMS.map((item) => {
+        if (item.path === '/conversations' && unread.data && unread.data > 0) {
+          return { ...item, badge: unread.data };
+        }
+        if (item.path === '/reminders' && pendingReminders.data && pendingReminders.data > 0) {
+          return { ...item, badge: pendingReminders.data };
+        }
+        return item;
+      }),
+    [unread.data, pendingReminders.data],
+  );
 
   return (
     <aside
@@ -221,7 +239,7 @@ export function Sidebar({
           overflowY: 'auto',
         }}
       >
-        {NAV_ITEMS.map((item) => (
+        {items.map((item) => (
           <NavButton key={item.path} item={item} collapsed={collapsed} />
         ))}
       </nav>
