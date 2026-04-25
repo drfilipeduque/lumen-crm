@@ -66,6 +66,8 @@ export const whatsappConnectionsRoutes: FastifyPluginAsync = async (app) => {
         name: c.name,
         type: c.type,
         phone: c.phone,
+        profileName: c.profileName,
+        avatar: c.avatar,
         status: c.status,
         active: c.active,
         coexistenceMode: c.coexistenceMode,

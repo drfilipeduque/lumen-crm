@@ -421,12 +421,14 @@ model File {
 // ============================================================
 
 model WhatsAppConnection {
-  id     String                   @id @default(cuid())
-  name   String
-  type   WhatsAppConnectionType
-  phone  String?
-  status WhatsAppConnectionStatus @default(DISCONNECTED)
-  active Boolean                  @default(true)
+  id           String                   @id @default(cuid())
+  name         String
+  type         WhatsAppConnectionType
+  phone        String?
+  profileName  String?
+  avatar       String?
+  status       WhatsAppConnectionStatus @default(DISCONNECTED)
+  active       Boolean                  @default(true)
 
   // OFFICIAL
   wabaId           String?

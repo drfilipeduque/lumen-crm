@@ -289,21 +289,7 @@ function ConnectionCard({
       }}
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-        <div
-          style={{
-            width: 36,
-            height: 36,
-            borderRadius: 10,
-            background: hexAlpha('#22c55e', 0.12),
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            color: '#22c55e',
-            flexShrink: 0,
-          }}
-        >
-          <Icons.Phone s={18} c="currentColor" />
-        </div>
+        <ConnectionAvatar avatar={c.avatar} status={c.status} />
         <div style={{ flex: 1, minWidth: 0 }}>
           <div
             style={{
@@ -318,7 +304,8 @@ function ConnectionCard({
             {c.name}
           </div>
           <div style={{ fontSize: 11.5, color: t.textSubtle, marginTop: 2 }}>
-            {c.phone ? formatPhoneDisplay(c.phone) : 'Sem número vinculado'}
+            {c.profileName && <span style={{ color: t.textDim, fontWeight: 500 }}>{c.profileName}{c.phone ? ' · ' : ''}</span>}
+            {c.phone ? formatPhoneDisplay(c.phone) : (!c.profileName ? 'Sem número vinculado' : '')}
           </div>
         </div>
         <span
@@ -438,6 +425,68 @@ function ConnectionCard({
 // ============================================================
 // NEW CONNECTION MODAL
 // ============================================================
+
+function ConnectionAvatar({
+  avatar,
+  status,
+}: {
+  avatar: string | null;
+  status: WAConnection['status'];
+}) {
+  const { tokens: t } = useTheme();
+  const [loadFailed, setLoadFailed] = useState(false);
+  const showImage = !!avatar && !loadFailed;
+  const isConnected = status === 'CONNECTED';
+
+  useEffect(() => {
+    setLoadFailed(false);
+  }, [avatar]);
+
+  return (
+    <div
+      style={{
+        position: 'relative',
+        width: 44,
+        height: 44,
+        borderRadius: 12,
+        background: showImage ? '#000' : hexAlpha('#22c55e', 0.12),
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        color: '#22c55e',
+        flexShrink: 0,
+        overflow: 'hidden',
+      }}
+    >
+      {showImage ? (
+        <img
+          src={avatar}
+          alt=""
+          referrerPolicy="no-referrer"
+          onError={() => setLoadFailed(true)}
+          style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+        />
+      ) : (
+        <Icons.Phone s={20} c="currentColor" />
+      )}
+      {isConnected && (
+        <span
+          title="Conectado"
+          style={{
+            position: 'absolute',
+            bottom: -2,
+            right: -2,
+            width: 14,
+            height: 14,
+            borderRadius: '50%',
+            background: t.success,
+            border: `2px solid ${t.bgElevated}`,
+          }}
+        />
+      )}
+    </div>
+  );
+}
 
 function NewConnectionModal({ onClose, onCreated }: { onClose: () => void; onCreated: (id: string) => void }) {
   const { tokens: t } = useTheme();

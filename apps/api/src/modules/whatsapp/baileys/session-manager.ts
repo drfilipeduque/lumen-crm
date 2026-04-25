@@ -96,12 +96,35 @@ export async function startSession(connectionId: string): Promise<void> {
     if (connection === 'open') {
       entry.qrDataUrl = null;
       entry.status = 'CONNECTED';
-      const phone = socket.user?.id?.split(':')[0]?.split('@')[0] ?? null;
+      const userJid = socket.user?.id;
+      const phone = userJid?.split(':')[0]?.split('@')[0] ?? null;
+      const profileName = socket.user?.name ?? null;
+
+      // Busca foto de perfil — best effort (CDN URL pode demorar/falhar)
+      let avatar: string | null = null;
+      if (userJid) {
+        try {
+          avatar = (await socket.profilePictureUrl(userJid, 'image')) ?? null;
+        } catch {
+          avatar = null;
+        }
+      }
+
       await prisma.whatsAppConnection.update({
         where: { id: connectionId },
-        data: { status: 'CONNECTED', phone: phone ?? undefined },
+        data: {
+          status: 'CONNECTED',
+          phone: phone ?? undefined,
+          profileName: profileName ?? undefined,
+          avatar: avatar ?? undefined,
+        },
       });
-      await broadcastConnectionUpdate(connectionId, { status: 'CONNECTED', phone });
+      await broadcastConnectionUpdate(connectionId, {
+        status: 'CONNECTED',
+        phone,
+        profileName,
+        avatar,
+      });
     }
 
     if (connection === 'close') {
@@ -182,20 +205,29 @@ async function persistStatus(connectionId: string, status: SessionEntry['status'
 
 async function broadcastConnectionUpdate(
   connectionId: string,
-  payload: { status: string; qr?: string; phone?: string | null },
+  payload: {
+    status: string;
+    qr?: string;
+    phone?: string | null;
+    profileName?: string | null;
+    avatar?: string | null;
+  },
 ) {
+  const fullPayload = {
+    connectionId,
+    status: payload.status,
+    qr: payload.qr,
+    phone: payload.phone,
+    profileName: payload.profileName,
+    avatar: payload.avatar,
+  };
   // Busca users autorizados pra essa conexao
   const links = await prisma.userWhatsAppConnection.findMany({
     where: { connectionId },
     select: { userId: true },
   });
   for (const l of links) {
-    emitToUser(l.userId, 'whatsapp:connection-update', {
-      connectionId,
-      status: payload.status,
-      qr: payload.qr,
-      phone: payload.phone,
-    });
+    emitToUser(l.userId, 'whatsapp:connection-update', fullPayload);
   }
   // Tambem manda pra TODOS os admins
   const admins = await prisma.user.findMany({
@@ -203,12 +235,7 @@ async function broadcastConnectionUpdate(
     select: { id: true },
   });
   for (const a of admins) {
-    emitToUser(a.id, 'whatsapp:connection-update', {
-      connectionId,
-      status: payload.status,
-      qr: payload.qr,
-      phone: payload.phone,
-    });
+    emitToUser(a.id, 'whatsapp:connection-update', fullPayload);
   }
 }
 

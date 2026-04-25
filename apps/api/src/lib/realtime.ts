@@ -45,6 +45,8 @@ export type RealtimeEventMap = {
     status: string;
     qr?: string;
     phone?: string | null;
+    profileName?: string | null;
+    avatar?: string | null;
   };
 };
 

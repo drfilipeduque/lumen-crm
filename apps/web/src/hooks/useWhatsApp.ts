@@ -10,6 +10,8 @@ export type WAConnection = {
   type: WAType;
   status: WAStatus;
   phone: string | null;
+  profileName: string | null;
+  avatar: string | null;
   active: boolean;
   webhookUrl: string | null;
   createdAt: string;
