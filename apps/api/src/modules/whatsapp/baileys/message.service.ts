@@ -1,12 +1,17 @@
 import {
   type WAMessage,
-  type proto,
   type MessageUpsertType,
 } from '@whiskeysockets/baileys';
 import { prisma, type Prisma } from '../../../lib/prisma.js';
 import { emitToUser } from '../../../lib/realtime.js';
 import { normalizePhone, formatPhoneBR } from '../../../lib/phone.js';
 import { getSocket } from './session-manager.js';
+import {
+  downloadIncomingMedia,
+  inferMessageTypeFromMime,
+  readUploadedFile,
+  saveMessageMedia,
+} from './media.js';
 
 type Actor = { id: string; role: string };
 
@@ -119,6 +124,28 @@ async function processOne(connectionId: string, msg: WAMessage) {
 
   // Notifica via socket os users autorizados (e admins)
   await broadcastNewMessage(connectionId, conversation.id, created.id, contact.id);
+
+  // Mídia: baixa em background e atualiza message + reemite
+  if (type !== 'TEXT') {
+    void (async () => {
+      try {
+        const dl = await downloadIncomingMedia(msg);
+        if (!dl) return;
+        const saved = await saveMessageMedia(connectionId, {
+          buffer: dl.buffer,
+          mimeType: dl.mimeType,
+          originalName: dl.fileName,
+        });
+        await prisma.message.update({
+          where: { id: created.id },
+          data: { mediaUrl: saved.url, mediaName: saved.name, mediaSize: saved.size },
+        });
+        await broadcastNewMessage(connectionId, conversation.id, created.id, contact.id);
+      } catch (e) {
+        console.error('[whatsapp/incoming] media download failed', e);
+      }
+    })();
+  }
 }
 
 function extractContent(msg: WAMessage): {
@@ -207,6 +234,8 @@ type SendInput = {
   type: 'TEXT' | 'IMAGE' | 'AUDIO' | 'DOCUMENT' | 'VIDEO';
   content?: string | null;
   mediaUrl?: string | null;
+  mediaName?: string | null;
+  mediaMimeType?: string | null;
 };
 
 export async function sendMessageToConversation(
@@ -240,36 +269,55 @@ export async function sendMessageToConversation(
   const phone = normalizePhone(conv.contact.phone);
   const jid = `${phone}@s.whatsapp.net`;
 
-  let payload: proto.IMessage;
+  // Pra mídia: lê o arquivo do disco se for /uploads/
+  let mediaBuffer: Buffer | null = null;
+  let mediaSize: number | null = null;
+  if (input.type !== 'TEXT' && input.mediaUrl && input.mediaUrl.startsWith('/uploads/')) {
+    try {
+      const f = await readUploadedFile(input.mediaUrl);
+      mediaBuffer = f.buffer;
+      mediaSize = f.size;
+    } catch {
+      throw new WAMessageError('MEDIA_READ_FAILED', 'Falha ao ler mídia anexada', 400);
+    }
+  }
+
+  let payload: Parameters<typeof socket.sendMessage>[1];
   switch (input.type) {
     case 'TEXT':
-      payload = { conversation: input.content ?? '' };
+      payload = { text: input.content ?? '' } as Parameters<typeof socket.sendMessage>[1];
       break;
     case 'IMAGE':
       payload = {
-        imageMessage: { caption: input.content ?? '', url: input.mediaUrl ?? '' } as proto.Message.IImageMessage,
-      };
+        image: mediaBuffer ?? { url: input.mediaUrl ?? '' },
+        caption: input.content ?? undefined,
+      } as Parameters<typeof socket.sendMessage>[1];
       break;
     case 'AUDIO':
       payload = {
-        audioMessage: { url: input.mediaUrl ?? '' } as proto.Message.IAudioMessage,
-      };
+        audio: mediaBuffer ?? { url: input.mediaUrl ?? '' },
+        mimetype: input.mediaName?.endsWith('.ogg') ? 'audio/ogg; codecs=opus' : 'audio/mp4',
+        ptt: true,
+      } as Parameters<typeof socket.sendMessage>[1];
       break;
     case 'VIDEO':
       payload = {
-        videoMessage: { caption: input.content ?? '', url: input.mediaUrl ?? '' } as proto.Message.IVideoMessage,
-      };
+        video: mediaBuffer ?? { url: input.mediaUrl ?? '' },
+        caption: input.content ?? undefined,
+      } as Parameters<typeof socket.sendMessage>[1];
       break;
     case 'DOCUMENT':
       payload = {
-        documentMessage: { fileName: input.content ?? 'arquivo', url: input.mediaUrl ?? '' } as proto.Message.IDocumentMessage,
-      };
+        document: mediaBuffer ?? { url: input.mediaUrl ?? '' },
+        fileName: input.mediaName ?? input.content ?? 'arquivo',
+        mimetype: input.mediaMimeType ?? 'application/octet-stream',
+      } as Parameters<typeof socket.sendMessage>[1];
       break;
   }
 
   let externalId: string | null = null;
   try {
-    const r = await socket.sendMessage(jid, payload as Parameters<typeof socket.sendMessage>[1]);
+    const r = await socket.sendMessage(jid, payload);
     externalId = r?.key?.id ?? null;
   } catch (e) {
     throw new WAMessageError(
@@ -286,6 +334,8 @@ export async function sendMessageToConversation(
       type: input.type,
       content: input.content ?? null,
       mediaUrl: input.mediaUrl ?? null,
+      mediaName: input.mediaName ?? null,
+      mediaSize: mediaSize ?? null,
       status: 'SENT',
       externalId,
       sentAt: new Date(),
@@ -296,6 +346,9 @@ export async function sendMessageToConversation(
     where: { id: conversationId },
     data: { lastMessageAt: created.createdAt },
   });
+
+  // Notifica outros users (admins / vinculados) sobre a mensagem enviada
+  await broadcastNewMessage(conv.connectionId, conversationId, created.id, conv.contact.id);
 
   return created;
 }

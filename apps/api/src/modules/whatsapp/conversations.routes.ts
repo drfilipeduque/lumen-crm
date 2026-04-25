@@ -12,6 +12,13 @@ import {
   resolveConversation,
   totalUnread,
 } from './conversations.service.js';
+import { prisma } from '../../lib/prisma.js';
+import {
+  MAX_MESSAGE_FILE_BYTES,
+  inferMessageTypeFromMime,
+  isAllowedMessageMime,
+  saveMessageMedia,
+} from './baileys/media.js';
 
 const idParam = z.object({ id: z.string().min(1) });
 
@@ -130,6 +137,72 @@ export const conversationsRoutes: FastifyPluginAsync = async (app) => {
     } catch (e) {
       return send(reply, e);
     }
+  });
+
+  app.post('/:id/upload', async (req, reply) => {
+    const p = idParam.safeParse(req.params);
+    if (!p.success) return reply.code(400).send({ error: 'VALIDATION', issues: p.error.flatten() });
+
+    if (!req.isMultipart()) {
+      return reply.code(400).send({ error: 'INVALID_REQUEST', message: 'Esperado multipart/form-data' });
+    }
+
+    // Visibilidade: reusa a mesma checagem do GET /:id (basta tentar ler)
+    const conv = await prisma.conversation.findUnique({
+      where: { id: p.data.id },
+      select: { id: true, connectionId: true, assigneeId: true },
+    });
+    if (!conv) return reply.code(404).send({ error: 'NOT_FOUND', message: 'Conversa não encontrada' });
+    if (req.user!.role !== 'ADMIN') {
+      const link = await prisma.userWhatsAppConnection.findUnique({
+        where: { userId_connectionId: { userId: req.user!.id, connectionId: conv.connectionId } },
+        select: { userId: true },
+      });
+      if (!link) return reply.code(403).send({ error: 'FORBIDDEN', message: 'Sem acesso à conexão' });
+      if (conv.assigneeId && conv.assigneeId !== req.user!.id) {
+        return reply.code(403).send({ error: 'FORBIDDEN', message: 'Conversa de outro usuário' });
+      }
+    }
+
+    let file;
+    try {
+      file = await req.file({ limits: { fileSize: MAX_MESSAGE_FILE_BYTES, files: 1 } });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : '';
+      if (msg.toLowerCase().includes('too large')) {
+        return reply.code(413).send({ error: 'FILE_TOO_LARGE', message: 'Arquivo excede 20MB' });
+      }
+      throw e;
+    }
+    if (!file) return reply.code(400).send({ error: 'NO_FILE', message: 'Nenhum arquivo recebido' });
+    if (!isAllowedMessageMime(file.mimetype)) {
+      return reply.code(415).send({ error: 'UNSUPPORTED_MEDIA', message: 'Tipo não suportado' });
+    }
+
+    let buffer: Buffer;
+    try {
+      buffer = await file.toBuffer();
+    } catch (e) {
+      const err = e as { code?: string; message?: string };
+      const tooLarge =
+        err.code === 'FST_REQ_FILE_TOO_LARGE' ||
+        (err.message ?? '').toLowerCase().includes('too large');
+      if (tooLarge) return reply.code(413).send({ error: 'FILE_TOO_LARGE', message: 'Arquivo excede 20MB' });
+      return reply.code(400).send({ error: 'INVALID_FILE', message: 'Falha ao ler arquivo' });
+    }
+
+    const saved = await saveMessageMedia(conv.connectionId, {
+      buffer,
+      mimeType: file.mimetype,
+      originalName: file.filename,
+    });
+    return reply.code(201).send({
+      url: saved.url,
+      name: saved.name,
+      mimeType: file.mimetype,
+      size: saved.size,
+      type: inferMessageTypeFromMime(file.mimetype),
+    });
   });
 
   app.post('/:id/create-opportunity', async (req, reply) => {

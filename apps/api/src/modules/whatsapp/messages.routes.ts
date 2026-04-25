@@ -8,7 +8,15 @@ const idParam = z.object({ id: z.string().min(1) });
 const sendBody = z.object({
   type: z.enum(['TEXT', 'IMAGE', 'AUDIO', 'DOCUMENT', 'VIDEO']),
   content: z.string().nullable().optional(),
-  mediaUrl: z.string().url('URL inválida').nullable().optional(),
+  mediaUrl: z
+    .string()
+    .nullable()
+    .optional()
+    .refine((v) => !v || v.startsWith('/uploads/') || /^https?:\/\//.test(v), {
+      message: 'mediaUrl deve ser /uploads/... ou http(s)://...',
+    }),
+  mediaName: z.string().nullable().optional(),
+  mediaMimeType: z.string().nullable().optional(),
 });
 
 function send(reply: FastifyReply, e: unknown) {
