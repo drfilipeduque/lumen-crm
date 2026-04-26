@@ -2,10 +2,10 @@ import {
   makeWASocket,
   Browsers,
   DisconnectReason,
-  fetchLatestBaileysVersion,
+  fetchLatestWaWebVersion,
   type WASocket,
   type ConnectionState,
-} from '@whiskeysockets/baileys';
+} from 'baileys';
 import qrcode from 'qrcode';
 import { prisma } from '../../../lib/prisma.js';
 import { emitToUser } from '../../../lib/realtime.js';
@@ -53,12 +53,19 @@ export async function startSession(connectionId: string): Promise<void> {
   if (!conn || conn.type !== 'UNOFFICIAL' || !conn.active) return;
 
   const { state, saveCreds } = await useDBAuthState(connectionId);
-  const { version } = await fetchLatestBaileysVersion().catch(() => ({ version: undefined as unknown as [number, number, number] }));
+
+  // Baileys v7 traz uma versão default no pacote, mas frequentemente fica
+  // desatualizada e o handshake do WhatsApp passa a falhar com 405. Buscamos
+  // a versão mais nova do web.whatsapp.com em runtime; se falhar, deixa
+  // o default da lib resolver.
+  const versionResult = await fetchLatestWaWebVersion({}).catch(
+    () => null as { version?: [number, number, number] } | null,
+  );
+  const version = versionResult?.version;
 
   const socket = makeWASocket({
-    version,
+    ...(version ? { version } : {}),
     auth: state,
-    printQRInTerminal: false,
     browser: Browsers.macOS('Lumen CRM'),
     logger: noopLog as unknown as Parameters<typeof makeWASocket>[0]['logger'],
     syncFullHistory: false,
@@ -137,15 +144,22 @@ export async function startSession(connectionId: string): Promise<void> {
       await broadcastConnectionUpdate(connectionId, { status: entry.status });
 
       if (loggedOut) {
-        // Logged out: limpa session pra forçar QR de novo na próxima conexão
+        // Logged out: limpa session pra forçar QR de novo na próxima conexão.
+        // Pode falhar se a conexão já foi deletada — ignoramos pra não
+        // derrubar o processo (P2025).
         await prisma.whatsAppConnection.update({
           where: { id: connectionId },
           data: { sessionData: null, phone: null },
-        });
+        }).catch(() => {});
       } else {
-        // Tenta reconectar em 3s
+        // Tenta reconectar em 3s — só se a conexão ainda existir e estiver ativa
         setTimeout(() => {
-          startSession(connectionId).catch(() => {});
+          prisma.whatsAppConnection
+            .findUnique({ where: { id: connectionId }, select: { active: true } })
+            .then((c) => {
+              if (c?.active) startSession(connectionId).catch(() => {});
+            })
+            .catch(() => {});
         }, 3000);
       }
     }

@@ -1,7 +1,8 @@
 import {
+  areJidsSameUser,
   type WAMessage,
   type MessageUpsertType,
-} from '@whiskeysockets/baileys';
+} from 'baileys';
 import { prisma, type Prisma } from '../../../lib/prisma.js';
 import { emitToUser } from '../../../lib/realtime.js';
 import { formatPhoneBR, normalizePhone, phoneVariants } from '../../../lib/phone.js';
@@ -33,9 +34,13 @@ export async function handleIncomingMessages(
   connectionId: string,
   event: { messages: WAMessage[]; type: MessageUpsertType },
 ): Promise<void> {
-  if (event.type !== 'notify') return;
-
   for (const msg of event.messages) {
+    // 'notify' = mensagem chegando agora (cliente escrevendo).
+    // 'append' = sync histórico OU eco de mensagens enviadas pelo APP do
+    //   celular conectado. Aceitamos append APENAS quando fromMe — assim
+    //   o atendente que respondeu pelo celular vê a msg no CRM, mas não
+    //   trazemos histórico inteiro de volta a cada reconexão.
+    if (event.type !== 'notify' && !msg.key.fromMe) continue;
     try {
       await processOne(connectionId, msg);
     } catch (e) {
@@ -45,23 +50,57 @@ export async function handleIncomingMessages(
 }
 
 async function processOne(connectionId: string, msg: WAMessage) {
-  // Ignora mensagens nossas (já registradas no envio)
-  if (msg.key.fromMe) return;
+  // Mensagens fromMe podem ter duas origens:
+  //   (a) enviadas pelo CRM — já temos uma Message com esse externalId,
+  //       então ignoramos pra não duplicar.
+  //   (b) enviadas pelo APP do celular conectado — não temos registro;
+  //       precisamos espelhar pro histórico ficar completo.
+  const fromMe = !!msg.key.fromMe;
+  if (fromMe && msg.key.id) {
+    const exists = await prisma.message.findFirst({
+      where: { externalId: msg.key.id },
+      select: { id: true },
+    });
+    if (exists) return;
+  }
+
   // Ignora mensagens de grupo por ora (jids com "@g.us")
   const jid = msg.key.remoteJid;
   if (!jid || jid.endsWith('@g.us') || jid === 'status@broadcast') return;
 
+  // Ignora "chat consigo mesmo" — quando o remoteJid é o próprio número
+  // conectado. Vem em sync histórico ou em notas pessoais; não deve virar
+  // conversa de cliente.
+  const sock = getSocket(connectionId);
+  if (sock?.user?.id && areJidsSameUser(jid, sock.user.id)) return;
+
   // WhatsApp moderno usa "@lid" pra contatos com privacidade ativa: o id NÃO é
-  // telefone, é um identificador interno. Pra esses, usamos o JID como chave
-  // de envio e armazenamos um placeholder em Contact.phone (com prefixo "lid:")
-  // pra não corromper buscas/exibição por telefone.
+  // telefone, é um identificador interno. Tentamos resolver via lidMapping
+  // do baileys (v7+); quando não dá, armazenamos um placeholder em
+  // Contact.phone (com prefixo "lid:") pra não corromper buscas/exibição.
   const isLid = jid.endsWith('@lid');
   const idPart = jid.split('@')[0]?.split(':')[0] ?? '';
 
   let contactPhone: string;
+  let resolvedFromLid = false;
   if (isLid) {
     if (!idPart) return;
-    contactPhone = `lid:${idPart}`;
+    // Tenta resolver LID → PN via store interno do baileys.
+    let pnJid: string | null = null;
+    try {
+      pnJid = (await sock?.signalRepository?.lidMapping?.getPNForLID?.(jid)) ?? null;
+    } catch {
+      pnJid = null;
+    }
+    const pnDigits = pnJid
+      ? normalizePhone(pnJid.split('@')[0]?.split(':')[0] ?? '')
+      : '';
+    if (pnDigits) {
+      contactPhone = pnDigits;
+      resolvedFromLid = true;
+    } else {
+      contactPhone = `lid:${idPart}`;
+    }
   } else {
     const phone = normalizePhone(idPart);
     if (!phone) return;
@@ -71,18 +110,35 @@ async function processOne(connectionId: string, msg: WAMessage) {
   const { type, content, mediaUrl } = extractContent(msg);
 
   // Encontra/cria contato.
-  // - Pra @lid: lookup direto pelo placeholder.
-  // - Pra telefone real: usa phoneVariants pra cobrir o "9 problem" do BR
-  //   e variantes com/sem prefixo 55.
+  // - Telefone real (incluindo LID resolvido): phoneVariants cobre o "9 problem".
+  // - LID não-resolvido: lookup direto pelo placeholder.
+  const phoneIsPlaceholder = contactPhone.startsWith('lid:');
   let contact = await prisma.contact.findFirst({
-    where: isLid
+    where: phoneIsPlaceholder
       ? { phone: contactPhone }
       : { phone: { in: phoneVariants(contactPhone) } },
-    select: { id: true, ownerId: true, name: true },
+    select: { id: true, ownerId: true, name: true, avatar: true },
   });
+
+  // Migração silenciosa: contato antigo salvo como "lid:<id>" agora resolve
+  // pra um PN. Reaproveita o mesmo Contact e atualiza pro telefone real.
+  if (!contact && resolvedFromLid) {
+    const legacy = await prisma.contact.findFirst({
+      where: { phone: `lid:${idPart}` },
+      select: { id: true, ownerId: true, name: true, avatar: true },
+    });
+    if (legacy) {
+      await prisma.contact.update({
+        where: { id: legacy.id },
+        data: { phone: contactPhone },
+      });
+      contact = legacy;
+    }
+  }
+
   let isNewContact = false;
   if (!contact) {
-    const fallbackName = isLid
+    const fallbackName = phoneIsPlaceholder
       ? msg.pushName?.trim() || 'Contato sem telefone'
       : msg.pushName?.trim() || formatPhoneBR(contactPhone);
     const created = await prisma.contact.create({
@@ -90,7 +146,7 @@ async function processOne(connectionId: string, msg: WAMessage) {
         name: fallbackName,
         phone: contactPhone,
       },
-      select: { id: true, ownerId: true, name: true },
+      select: { id: true, ownerId: true, name: true, avatar: true },
     });
     contact = created;
     isNewContact = true;
@@ -123,11 +179,14 @@ async function processOne(connectionId: string, msg: WAMessage) {
   const created = await prisma.message.create({
     data: {
       conversationId: conversation.id,
-      fromMe: false,
+      fromMe,
       type,
       content,
       mediaUrl,
-      status: 'DELIVERED',
+      // fromMe enviada pelo app do celular: marca como SENT (o servidor já
+      // entregou — esse evento veio do próprio WhatsApp). Recebida do
+      // contato: DELIVERED (chegou pra gente).
+      status: fromMe ? 'SENT' : 'DELIVERED',
       externalId: msg.key.id ?? null,
       sentAt: msg.messageTimestamp
         ? new Date(Number(msg.messageTimestamp) * 1000)
@@ -135,22 +194,43 @@ async function processOne(connectionId: string, msg: WAMessage) {
     },
   });
 
-  // Atualiza conversation
+  // Atualiza conversation. Só conta unread quando é o contato escrevendo.
   await prisma.conversation.update({
     where: { id: conversation.id },
     data: {
       lastMessageAt: created.createdAt,
-      unreadCount: { increment: 1 },
+      ...(fromMe ? {} : { unreadCount: { increment: 1 } }),
     },
   });
 
-  // Aplica regra de entrada se contato é novo
+  // Aplica regra de entrada sempre que aparece contato novo.
+  // Inclui o caso do atendente puxar conversa do celular: mesmo assim é
+  // um lead novo entrando no funil. Se restringíssemos a !fromMe, quando
+  // o cliente respondesse o contact já existiria e a regra nunca rodaria.
   if (isNewContact) {
     await applyEntryRule(connectionId, contact.id);
   }
 
   // Notifica via socket os users autorizados (e admins)
   await broadcastNewMessage(connectionId, conversation.id, created.id, contact.id);
+
+  // Avatar do contato — busca em background quando ainda não temos.
+  // profilePictureUrl pode demorar/falhar (CDN expira ou usuário com
+  // privacidade), então fica fora do path quente.
+  const contactId = contact.id;
+  if (!contact.avatar) {
+    void (async () => {
+      try {
+        const url = (await sock?.profilePictureUrl?.(jid, 'image')) ?? null;
+        if (url) {
+          await prisma.contact.update({ where: { id: contactId }, data: { avatar: url } });
+          await broadcastNewMessage(connectionId, conversation.id, created.id, contactId);
+        }
+      } catch {
+        /* sem foto / privacidade — segue sem avatar */
+      }
+    })();
+  }
 
   // Mídia: baixa em background e atualiza message + reemite
   if (type !== 'TEXT') {

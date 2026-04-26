@@ -192,6 +192,7 @@ model Contact {
   name      String
   phone     String    @unique
   email     String?
+  avatar    String?
   birthDate DateTime?
   cpf       String?
   address   Json?

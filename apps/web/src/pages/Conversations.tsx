@@ -364,7 +364,7 @@ function ConversationRow({
         fontFamily: FONT_STACK,
       }}
     >
-      <Avatar name={conv.contactName} size={40} />
+      <Avatar name={conv.contactName} size={40} url={conv.contactAvatar} />
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           <div
@@ -656,7 +656,7 @@ function ChatHeader({
         background: t.bgElevated,
       }}
     >
-      <Avatar name={detail.contact.name} size={40} />
+      <Avatar name={detail.contact.name} size={40} url={detail.contact.avatar} />
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontSize: 14, fontWeight: 600, color: t.text }}>{detail.contact.name}</div>
         <div style={{ fontSize: 11, color: t.textSubtle, display: 'flex', gap: 6, alignItems: 'center' }}>
@@ -1780,7 +1780,7 @@ function RightPanel({
             textAlign: 'center',
           }}
         >
-          <Avatar name={detail.contact.name} size={64} />
+          <Avatar name={detail.contact.name} size={64} url={detail.contact.avatar} />
           <div>
             <div style={{ fontSize: 15, fontWeight: 600, color: t.text }}>{detail.contact.name}</div>
             <div style={{ fontSize: 11.5, color: t.textSubtle, marginTop: 2 }}>
@@ -2135,7 +2135,8 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   );
 }
 
-function Avatar({ name, size = 32 }: { name: string; size?: number }) {
+function Avatar({ name, size = 32, url }: { name: string; size?: number; url?: string | null }) {
+  const [broken, setBroken] = useState(false);
   const initials = name
     .trim()
     .split(/\s+/)
@@ -2143,6 +2144,23 @@ function Avatar({ name, size = 32 }: { name: string; size?: number }) {
     .slice(0, 2)
     .map((p) => p[0]!.toUpperCase())
     .join('');
+  if (url && !broken) {
+    return (
+      <img
+        src={url}
+        alt={name}
+        onError={() => setBroken(true)}
+        style={{
+          width: size,
+          height: size,
+          borderRadius: '50%',
+          objectFit: 'cover',
+          flexShrink: 0,
+          background: '#222',
+        }}
+      />
+    );
+  }
   return (
     <div
       style={{
