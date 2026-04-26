@@ -1,4 +1,5 @@
 import {
+  areJidsSameUser,
   type WAMessage,
   type MessageUpsertType,
 } from 'baileys';
@@ -63,6 +64,12 @@ async function processOne(connectionId: string, msg: WAMessage) {
   const jid = msg.key.remoteJid;
   if (!jid || jid.endsWith('@g.us') || jid === 'status@broadcast') return;
 
+  // Ignora "chat consigo mesmo" — quando o remoteJid é o próprio número
+  // conectado. Vem em sync histórico ou em notas pessoais; não deve virar
+  // conversa de cliente.
+  const sock = getSocket(connectionId);
+  if (sock?.user?.id && areJidsSameUser(jid, sock.user.id)) return;
+
   // WhatsApp moderno usa "@lid" pra contatos com privacidade ativa: o id NÃO é
   // telefone, é um identificador interno. Tentamos resolver via lidMapping
   // do baileys (v7+); quando não dá, armazenamos um placeholder em
@@ -75,7 +82,6 @@ async function processOne(connectionId: string, msg: WAMessage) {
   if (isLid) {
     if (!idPart) return;
     // Tenta resolver LID → PN via store interno do baileys.
-    const sock = getSocket(connectionId);
     let pnJid: string | null = null;
     try {
       pnJid = (await sock?.signalRepository?.lidMapping?.getPNForLID?.(jid)) ?? null;
