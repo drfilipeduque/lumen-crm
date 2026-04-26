@@ -1,7 +1,7 @@
 import {
   type WAMessage,
   type MessageUpsertType,
-} from '@whiskeysockets/baileys';
+} from 'baileys';
 import { prisma, type Prisma } from '../../../lib/prisma.js';
 import { emitToUser } from '../../../lib/realtime.js';
 import { formatPhoneBR, normalizePhone, phoneVariants } from '../../../lib/phone.js';
@@ -52,16 +52,33 @@ async function processOne(connectionId: string, msg: WAMessage) {
   if (!jid || jid.endsWith('@g.us') || jid === 'status@broadcast') return;
 
   // WhatsApp moderno usa "@lid" pra contatos com privacidade ativa: o id NÃO é
-  // telefone, é um identificador interno. Pra esses, usamos o JID como chave
-  // de envio e armazenamos um placeholder em Contact.phone (com prefixo "lid:")
-  // pra não corromper buscas/exibição por telefone.
+  // telefone, é um identificador interno. Tentamos resolver via lidMapping
+  // do baileys (v7+); quando não dá, armazenamos um placeholder em
+  // Contact.phone (com prefixo "lid:") pra não corromper buscas/exibição.
   const isLid = jid.endsWith('@lid');
   const idPart = jid.split('@')[0]?.split(':')[0] ?? '';
 
   let contactPhone: string;
+  let resolvedFromLid = false;
   if (isLid) {
     if (!idPart) return;
-    contactPhone = `lid:${idPart}`;
+    // Tenta resolver LID → PN via store interno do baileys.
+    const sock = getSocket(connectionId);
+    let pnJid: string | null = null;
+    try {
+      pnJid = (await sock?.signalRepository?.lidMapping?.getPNForLID?.(jid)) ?? null;
+    } catch {
+      pnJid = null;
+    }
+    const pnDigits = pnJid
+      ? normalizePhone(pnJid.split('@')[0]?.split(':')[0] ?? '')
+      : '';
+    if (pnDigits) {
+      contactPhone = pnDigits;
+      resolvedFromLid = true;
+    } else {
+      contactPhone = `lid:${idPart}`;
+    }
   } else {
     const phone = normalizePhone(idPart);
     if (!phone) return;
@@ -71,18 +88,35 @@ async function processOne(connectionId: string, msg: WAMessage) {
   const { type, content, mediaUrl } = extractContent(msg);
 
   // Encontra/cria contato.
-  // - Pra @lid: lookup direto pelo placeholder.
-  // - Pra telefone real: usa phoneVariants pra cobrir o "9 problem" do BR
-  //   e variantes com/sem prefixo 55.
+  // - Telefone real (incluindo LID resolvido): phoneVariants cobre o "9 problem".
+  // - LID não-resolvido: lookup direto pelo placeholder.
+  const phoneIsPlaceholder = contactPhone.startsWith('lid:');
   let contact = await prisma.contact.findFirst({
-    where: isLid
+    where: phoneIsPlaceholder
       ? { phone: contactPhone }
       : { phone: { in: phoneVariants(contactPhone) } },
     select: { id: true, ownerId: true, name: true },
   });
+
+  // Migração silenciosa: contato antigo salvo como "lid:<id>" agora resolve
+  // pra um PN. Reaproveita o mesmo Contact e atualiza pro telefone real.
+  if (!contact && resolvedFromLid) {
+    const legacy = await prisma.contact.findFirst({
+      where: { phone: `lid:${idPart}` },
+      select: { id: true, ownerId: true, name: true },
+    });
+    if (legacy) {
+      await prisma.contact.update({
+        where: { id: legacy.id },
+        data: { phone: contactPhone },
+      });
+      contact = legacy;
+    }
+  }
+
   let isNewContact = false;
   if (!contact) {
-    const fallbackName = isLid
+    const fallbackName = phoneIsPlaceholder
       ? msg.pushName?.trim() || 'Contato sem telefone'
       : msg.pushName?.trim() || formatPhoneBR(contactPhone);
     const created = await prisma.contact.create({
