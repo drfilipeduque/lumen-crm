@@ -144,15 +144,22 @@ export async function startSession(connectionId: string): Promise<void> {
       await broadcastConnectionUpdate(connectionId, { status: entry.status });
 
       if (loggedOut) {
-        // Logged out: limpa session pra forçar QR de novo na próxima conexão
+        // Logged out: limpa session pra forçar QR de novo na próxima conexão.
+        // Pode falhar se a conexão já foi deletada — ignoramos pra não
+        // derrubar o processo (P2025).
         await prisma.whatsAppConnection.update({
           where: { id: connectionId },
           data: { sessionData: null, phone: null },
-        });
+        }).catch(() => {});
       } else {
-        // Tenta reconectar em 3s
+        // Tenta reconectar em 3s — só se a conexão ainda existir e estiver ativa
         setTimeout(() => {
-          startSession(connectionId).catch(() => {});
+          prisma.whatsAppConnection
+            .findUnique({ where: { id: connectionId }, select: { active: true } })
+            .then((c) => {
+              if (c?.active) startSession(connectionId).catch(() => {});
+            })
+            .catch(() => {});
         }, 3000);
       }
     }
