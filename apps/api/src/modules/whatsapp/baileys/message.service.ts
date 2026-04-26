@@ -51,24 +51,44 @@ async function processOne(connectionId: string, msg: WAMessage) {
   const jid = msg.key.remoteJid;
   if (!jid || jid.endsWith('@g.us') || jid === 'status@broadcast') return;
 
-  const phoneRaw = jid.split('@')[0]?.split(':')[0] ?? '';
-  const phone = normalizePhone(phoneRaw);
-  if (!phone) return;
+  // WhatsApp moderno usa "@lid" pra contatos com privacidade ativa: o id NÃO é
+  // telefone, é um identificador interno. Pra esses, usamos o JID como chave
+  // de envio e armazenamos um placeholder em Contact.phone (com prefixo "lid:")
+  // pra não corromper buscas/exibição por telefone.
+  const isLid = jid.endsWith('@lid');
+  const idPart = jid.split('@')[0]?.split(':')[0] ?? '';
+
+  let contactPhone: string;
+  if (isLid) {
+    if (!idPart) return;
+    contactPhone = `lid:${idPart}`;
+  } else {
+    const phone = normalizePhone(idPart);
+    if (!phone) return;
+    contactPhone = phone;
+  }
 
   const { type, content, mediaUrl } = extractContent(msg);
 
-  // Encontra/cria contato — usa phoneVariants pra cobrir o "9 problem"
-  // do BR e variantes com/sem prefixo 55.
+  // Encontra/cria contato.
+  // - Pra @lid: lookup direto pelo placeholder.
+  // - Pra telefone real: usa phoneVariants pra cobrir o "9 problem" do BR
+  //   e variantes com/sem prefixo 55.
   let contact = await prisma.contact.findFirst({
-    where: { phone: { in: phoneVariants(phone) } },
+    where: isLid
+      ? { phone: contactPhone }
+      : { phone: { in: phoneVariants(contactPhone) } },
     select: { id: true, ownerId: true, name: true },
   });
   let isNewContact = false;
   if (!contact) {
+    const fallbackName = isLid
+      ? msg.pushName?.trim() || 'Contato sem telefone'
+      : msg.pushName?.trim() || formatPhoneBR(contactPhone);
     const created = await prisma.contact.create({
       data: {
-        name: msg.pushName?.trim() || formatPhoneBR(phone),
-        phone,
+        name: fallbackName,
+        phone: contactPhone,
       },
       select: { id: true, ownerId: true, name: true },
     });
@@ -76,10 +96,10 @@ async function processOne(connectionId: string, msg: WAMessage) {
     isNewContact = true;
   }
 
-  // Encontra/cria conversation
+  // Encontra/cria conversation; sempre garante whatsappJid atualizado pro envio.
   let conversation = await prisma.conversation.findUnique({
     where: { contactId_connectionId: { contactId: contact.id, connectionId } },
-    select: { id: true, assigneeId: true },
+    select: { id: true, assigneeId: true, whatsappJid: true },
   });
   if (!conversation) {
     conversation = await prisma.conversation.create({
@@ -88,8 +108,14 @@ async function processOne(connectionId: string, msg: WAMessage) {
         connectionId,
         status: 'OPEN',
         unreadCount: 0,
+        whatsappJid: jid,
       },
-      select: { id: true, assigneeId: true },
+      select: { id: true, assigneeId: true, whatsappJid: true },
+    });
+  } else if (conversation.whatsappJid !== jid) {
+    await prisma.conversation.update({
+      where: { id: conversation.id },
+      data: { whatsappJid: jid },
     });
   }
 
@@ -267,8 +293,23 @@ export async function sendMessageToConversation(
     throw new WAMessageError('NOT_CONNECTED', 'Conexão WhatsApp não está ativa', 503);
   }
 
-  const phone = normalizePhone(conv.contact.phone);
-  const jid = `${phone}@s.whatsapp.net`;
+  // Prioriza o JID que o Baileys já nos entregou (cobre @lid e device suffixes).
+  // Fallback: monta a partir do phone — só funciona se for telefone real,
+  // não LID placeholder.
+  let jid: string;
+  if (conv.whatsappJid) {
+    jid = conv.whatsappJid;
+  } else {
+    if (conv.contact.phone.startsWith('lid:')) {
+      throw new WAMessageError(
+        'NO_JID',
+        'Esse contato não tem telefone visível e a conversa ainda não tem JID resolvido',
+        400,
+      );
+    }
+    const phone = normalizePhone(conv.contact.phone);
+    jid = `${phone}@s.whatsapp.net`;
+  }
 
   // Pra mídia: lê o arquivo do disco se for /uploads/
   let mediaBuffer: Buffer | null = null;
