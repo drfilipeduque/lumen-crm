@@ -1,7 +1,7 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { extname, resolve } from 'node:path';
 import { randomBytes } from 'node:crypto';
-import { downloadMediaMessage, type WAMessage } from '@whiskeysockets/baileys';
+import { downloadMediaMessage, type WAMessage } from 'baileys';
 import { UPLOADS_DIR } from '../../../lib/uploads.js';
 
 export const MESSAGES_DIR = 'messages';

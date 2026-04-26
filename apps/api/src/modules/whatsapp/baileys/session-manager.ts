@@ -2,10 +2,9 @@ import {
   makeWASocket,
   Browsers,
   DisconnectReason,
-  fetchLatestBaileysVersion,
   type WASocket,
   type ConnectionState,
-} from '@whiskeysockets/baileys';
+} from 'baileys';
 import qrcode from 'qrcode';
 import { prisma } from '../../../lib/prisma.js';
 import { emitToUser } from '../../../lib/realtime.js';
@@ -53,12 +52,11 @@ export async function startSession(connectionId: string): Promise<void> {
   if (!conn || conn.type !== 'UNOFFICIAL' || !conn.active) return;
 
   const { state, saveCreds } = await useDBAuthState(connectionId);
-  const { version } = await fetchLatestBaileysVersion().catch(() => ({ version: undefined as unknown as [number, number, number] }));
 
+  // baileys v7 não exporta mais fetchLatestBaileysVersion — a lib mantém
+  // a versão WA internamente.
   const socket = makeWASocket({
-    version,
     auth: state,
-    printQRInTerminal: false,
     browser: Browsers.macOS('Lumen CRM'),
     logger: noopLog as unknown as Parameters<typeof makeWASocket>[0]['logger'],
     syncFullHistory: false,

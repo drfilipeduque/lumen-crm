@@ -1,27 +1,11 @@
 import {
   initAuthCreds,
   BufferJSON,
+  proto,
   type AuthenticationCreds,
   type AuthenticationState,
   type SignalDataTypeMap,
-} from '@whiskeysockets/baileys';
-// proto vem de WAProto; importado lazy só se precisar (compatibilidade ESM)
-type ProtoLike = {
-  Message: {
-    AppStateSyncKeyData: { fromObject: (o: Record<string, unknown>) => unknown };
-  };
-};
-let _proto: ProtoLike | null = null;
-async function getProto(): Promise<ProtoLike | null> {
-  if (_proto) return _proto;
-  try {
-    const mod = await import('@whiskeysockets/baileys/WAProto/index.js');
-    _proto = (mod as { proto?: ProtoLike }).proto ?? (mod as unknown as { default?: { proto?: ProtoLike } }).default?.proto ?? null;
-    return _proto;
-  } catch {
-    return null;
-  }
-}
+} from 'baileys';
 import { prisma } from '../../../lib/prisma.js';
 import { decryptString, encryptString } from '../../../lib/encryption.js';
 
@@ -84,11 +68,10 @@ export async function useDBAuthState(connectionId: string): Promise<{
       ) => {
         const out: { [id: string]: SignalDataTypeMap[T] } = {};
         const bucket = blob.keys[type as string] ?? {};
-        const proto = type === 'app-state-sync-key' ? await getProto() : null;
         for (const id of ids) {
           const v = bucket[id];
           if (v !== undefined) {
-            if (proto && type === 'app-state-sync-key') {
+            if (type === 'app-state-sync-key') {
               out[id] = proto.Message.AppStateSyncKeyData.fromObject(
                 v as Record<string, unknown>,
               ) as unknown as SignalDataTypeMap[T];
