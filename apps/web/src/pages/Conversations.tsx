@@ -29,6 +29,7 @@ import { useTags } from '../hooks/useTags';
 import { useWhatsAppConnections } from '../hooks/useWhatsApp';
 import { usePipeline, usePipelines } from '../hooks/usePipelines';
 import { useSocketEvent } from '../hooks/useSocketIO';
+import { ScriptsPopover, type RenderedScript } from '../components/conversations/ScriptsPopover';
 
 // ============================================================
 // PAGE
@@ -568,6 +569,8 @@ function ChatArea({ conversationId, onClose }: { conversationId: string; onClose
         />
         <Composer
           conversationId={conversationId}
+          contactId={detail.data.contact.id}
+          opportunityId={detail.data.activeOpportunity?.id ?? undefined}
           disabled={detail.data.connection.status !== 'CONNECTED'}
           onSend={async (input) => {
             await send.mutateAsync({ id: conversationId, ...input });
@@ -1181,10 +1184,14 @@ function StatusTick({ status }: { status: Message['status'] }) {
 
 function Composer({
   conversationId,
+  contactId,
+  opportunityId,
   disabled,
   onSend,
 }: {
   conversationId: string;
+  contactId?: string;
+  opportunityId?: string;
   disabled: boolean;
   onSend: (input: SendMessageInput) => Promise<void>;
 }) {
@@ -1201,6 +1208,7 @@ function Composer({
   } | null>(null);
   const [recording, setRecording] = useState(false);
   const [attachOpen, setAttachOpen] = useState(false);
+  const [scriptsOpen, setScriptsOpen] = useState(false);
   const taRef = useRef<HTMLTextAreaElement>(null);
   const fileImgRef = useRef<HTMLInputElement>(null);
   const fileDocRef = useRef<HTMLInputElement>(null);
@@ -1208,6 +1216,39 @@ function Composer({
   const upload = useUploadConversationMedia();
   const attachRef = useRef<HTMLDivElement>(null);
   useClickOutside(attachRef, () => setAttachOpen(false), attachOpen);
+
+  const handlePickScript = (rendered: RenderedScript) => {
+    setText((prev) => {
+      const sep = prev && !prev.endsWith('\n') ? '\n' : '';
+      return prev ? prev + sep + rendered.content : rendered.content;
+    });
+    if (rendered.mediaUrl && rendered.mediaType) {
+      const ext = rendered.mediaUrl.split('/').pop() ?? 'arquivo';
+      const mime =
+        rendered.mediaType === 'IMAGE'
+          ? 'image/jpeg'
+          : rendered.mediaType === 'AUDIO'
+            ? 'audio/mpeg'
+            : rendered.mediaType === 'VIDEO'
+              ? 'video/mp4'
+              : 'application/octet-stream';
+      setAttached({
+        type: rendered.mediaType,
+        url: rendered.mediaUrl,
+        name: ext,
+        mimeType: mime,
+        size: 0,
+        previewUrl: rendered.mediaType === 'IMAGE' ? rendered.mediaUrl : undefined,
+      });
+    }
+    requestAnimationFrame(() => {
+      const el = taRef.current;
+      if (!el) return;
+      el.focus();
+      const len = el.value.length;
+      el.setSelectionRange(len, len);
+    });
+  };
 
   useEffect(() => {
     const el = taRef.current;
@@ -1378,6 +1419,26 @@ function Composer({
             padding: '6px 8px',
           }}
         >
+          <div style={{ position: 'relative' }}>
+            <button
+              type="button"
+              title="Scripts"
+              onClick={() => setScriptsOpen((v) => !v)}
+              disabled={disabled}
+              style={{ ...iconButton(t), opacity: disabled ? 0.4 : 1 }}
+            >
+              <Icons.AlignLeft s={16} c={scriptsOpen ? t.gold : t.textDim} />
+            </button>
+            {scriptsOpen && (
+              <ScriptsPopover
+                contactId={contactId}
+                opportunityId={opportunityId}
+                onPick={handlePickScript}
+                onClose={() => setScriptsOpen(false)}
+              />
+            )}
+          </div>
+
           <div ref={attachRef} style={{ position: 'relative' }}>
             <button
               type="button"
