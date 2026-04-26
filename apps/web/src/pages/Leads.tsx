@@ -2225,9 +2225,13 @@ function buttonGhost(t: ReturnType<typeof useTheme>['tokens']): CSSProperties {
 }
 
 function formatPhone(raw: string): string {
+  if (raw.startsWith('lid:')) return 'Telefone oculto';
   const d = raw.replace(/\D/g, '');
   if (d.length === 13 && d.startsWith('55')) {
     return `+55 (${d.slice(2, 4)}) ${d.slice(4, 9)}-${d.slice(9)}`;
+  }
+  if (d.length === 12 && d.startsWith('55')) {
+    return `+55 (${d.slice(2, 4)}) ${d.slice(4, 8)}-${d.slice(8)}`;
   }
   if (d.length === 11) return `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}`;
   if (d.length === 10) return `(${d.slice(0, 2)}) ${d.slice(2, 6)}-${d.slice(6)}`;

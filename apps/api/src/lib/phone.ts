@@ -73,7 +73,10 @@ export function phoneVariants(raw: string): string[] {
 }
 
 // Formata pra exibição. Aceita só dígitos.
+// Se o phone tiver prefixo "lid:" (contato com privacidade ativa), retorna
+// um label genérico — não há telefone real pra mostrar.
 export function formatPhoneBR(raw: string): string {
+  if (raw.startsWith('lid:')) return 'Telefone oculto';
   const d = normalizePhone(raw);
   // 55 + 11 (DDD + 9 + 8 dígitos) = 13 — celular moderno
   if (d.length === 13 && d.startsWith('55')) {
