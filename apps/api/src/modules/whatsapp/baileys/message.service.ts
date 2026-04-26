@@ -34,9 +34,13 @@ export async function handleIncomingMessages(
   connectionId: string,
   event: { messages: WAMessage[]; type: MessageUpsertType },
 ): Promise<void> {
-  if (event.type !== 'notify') return;
-
   for (const msg of event.messages) {
+    // 'notify' = mensagem chegando agora (cliente escrevendo).
+    // 'append' = sync histórico OU eco de mensagens enviadas pelo APP do
+    //   celular conectado. Aceitamos append APENAS quando fromMe — assim
+    //   o atendente que respondeu pelo celular vê a msg no CRM, mas não
+    //   trazemos histórico inteiro de volta a cada reconexão.
+    if (event.type !== 'notify' && !msg.key.fromMe) continue;
     try {
       await processOne(connectionId, msg);
     } catch (e) {
