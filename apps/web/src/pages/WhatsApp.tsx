@@ -19,6 +19,7 @@ import {
   type WAConnection,
 } from '../hooks/useWhatsApp';
 import { usePipeline, usePipelines } from '../hooks/usePipelines';
+import { ScriptsTab } from './whatsapp/ScriptsTab';
 
 type Tab = 'official' | 'unofficial' | 'scripts' | 'rules';
 
@@ -102,7 +103,7 @@ export function WhatsAppPage() {
       <div style={{ flex: 1, overflowY: 'auto' }}>
         {tab === 'official' && <ComingSoonTab title="API Oficial" description="Integração direta com a Cloud API da Meta. Em breve." />}
         {tab === 'unofficial' && <UnofficialTab />}
-        {tab === 'scripts' && <ComingSoonTab title="Scripts" description="Mensagens prontas e templates. Em breve." />}
+        {tab === 'scripts' && <ScriptsTab />}
         {tab === 'rules' && <RulesTab />}
       </div>
     </div>
