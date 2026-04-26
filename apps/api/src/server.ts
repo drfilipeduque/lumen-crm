@@ -25,6 +25,7 @@ import {
 import { conversationMessagesRoutes } from './modules/whatsapp/messages.routes.js';
 import { conversationsRoutes } from './modules/whatsapp/conversations.routes.js';
 import { restoreAllSessions } from './modules/whatsapp/baileys/session-manager.js';
+import { scriptFoldersRoutes, scriptsRoutes } from './modules/scripts/scripts.routes.js';
 
 const app = Fastify({
   logger: {
@@ -74,6 +75,8 @@ await app.register(whatsappConnectionsRoutes, { prefix: '/whatsapp/connections' 
 await app.register(whatsappEntryRulesRoutes, { prefix: '/whatsapp/entry-rules' });
 await app.register(conversationsRoutes, { prefix: '/conversations' });
 await app.register(conversationMessagesRoutes, { prefix: '/conversations' });
+await app.register(scriptsRoutes, { prefix: '/scripts' });
+await app.register(scriptFoldersRoutes, { prefix: '/script-folders' });
 
 try {
   await app.listen({ host: env.API_HOST, port: env.API_PORT });
