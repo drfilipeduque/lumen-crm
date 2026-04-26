@@ -2,6 +2,7 @@ import {
   makeWASocket,
   Browsers,
   DisconnectReason,
+  fetchLatestWaWebVersion,
   type WASocket,
   type ConnectionState,
 } from 'baileys';
@@ -53,9 +54,17 @@ export async function startSession(connectionId: string): Promise<void> {
 
   const { state, saveCreds } = await useDBAuthState(connectionId);
 
-  // baileys v7 não exporta mais fetchLatestBaileysVersion — a lib mantém
-  // a versão WA internamente.
+  // Baileys v7 traz uma versão default no pacote, mas frequentemente fica
+  // desatualizada e o handshake do WhatsApp passa a falhar com 405. Buscamos
+  // a versão mais nova do web.whatsapp.com em runtime; se falhar, deixa
+  // o default da lib resolver.
+  const versionResult = await fetchLatestWaWebVersion({}).catch(
+    () => null as { version?: [number, number, number] } | null,
+  );
+  const version = versionResult?.version;
+
   const socket = makeWASocket({
+    ...(version ? { version } : {}),
     auth: state,
     browser: Browsers.macOS('Lumen CRM'),
     logger: noopLog as unknown as Parameters<typeof makeWASocket>[0]['logger'],
