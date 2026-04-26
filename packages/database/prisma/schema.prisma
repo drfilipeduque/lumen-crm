@@ -488,6 +488,9 @@ model Conversation {
   status        ConversationStatus @default(OPEN)
   lastMessageAt DateTime?
   unreadCount   Int                @default(0)
+  // JID exato pra envio (ex: "5511...@s.whatsapp.net" ou "...@lid").
+  // Quando ausente, monta a partir do phone do contato.
+  whatsappJid   String?
 
   contact    Contact            @relation(fields: [contactId], references: [id], onDelete: Cascade)
   connection WhatsAppConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
