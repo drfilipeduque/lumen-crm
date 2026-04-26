@@ -193,10 +193,11 @@ async function processOne(connectionId: string, msg: WAMessage) {
     },
   });
 
-  // Aplica regra de entrada só se o contato é novo E foi ele quem escreveu
-  // (lead chegando). Mensagem sua pra um número novo não cria opportunity
-  // automaticamente.
-  if (isNewContact && !fromMe) {
+  // Aplica regra de entrada sempre que aparece contato novo.
+  // Inclui o caso do atendente puxar conversa do celular: mesmo assim é
+  // um lead novo entrando no funil. Se restringíssemos a !fromMe, quando
+  // o cliente respondesse o contact já existiria e a regra nunca rodaria.
+  if (isNewContact) {
     await applyEntryRule(connectionId, contact.id);
   }
 
