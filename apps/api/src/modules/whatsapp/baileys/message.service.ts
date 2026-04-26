@@ -45,8 +45,20 @@ export async function handleIncomingMessages(
 }
 
 async function processOne(connectionId: string, msg: WAMessage) {
-  // Ignora mensagens nossas (já registradas no envio)
-  if (msg.key.fromMe) return;
+  // Mensagens fromMe podem ter duas origens:
+  //   (a) enviadas pelo CRM — já temos uma Message com esse externalId,
+  //       então ignoramos pra não duplicar.
+  //   (b) enviadas pelo APP do celular conectado — não temos registro;
+  //       precisamos espelhar pro histórico ficar completo.
+  const fromMe = !!msg.key.fromMe;
+  if (fromMe && msg.key.id) {
+    const exists = await prisma.message.findFirst({
+      where: { externalId: msg.key.id },
+      select: { id: true },
+    });
+    if (exists) return;
+  }
+
   // Ignora mensagens de grupo por ora (jids com "@g.us")
   const jid = msg.key.remoteJid;
   if (!jid || jid.endsWith('@g.us') || jid === 'status@broadcast') return;
@@ -157,11 +169,14 @@ async function processOne(connectionId: string, msg: WAMessage) {
   const created = await prisma.message.create({
     data: {
       conversationId: conversation.id,
-      fromMe: false,
+      fromMe,
       type,
       content,
       mediaUrl,
-      status: 'DELIVERED',
+      // fromMe enviada pelo app do celular: marca como SENT (o servidor já
+      // entregou — esse evento veio do próprio WhatsApp). Recebida do
+      // contato: DELIVERED (chegou pra gente).
+      status: fromMe ? 'SENT' : 'DELIVERED',
       externalId: msg.key.id ?? null,
       sentAt: msg.messageTimestamp
         ? new Date(Number(msg.messageTimestamp) * 1000)
@@ -169,17 +184,19 @@ async function processOne(connectionId: string, msg: WAMessage) {
     },
   });
 
-  // Atualiza conversation
+  // Atualiza conversation. Só conta unread quando é o contato escrevendo.
   await prisma.conversation.update({
     where: { id: conversation.id },
     data: {
       lastMessageAt: created.createdAt,
-      unreadCount: { increment: 1 },
+      ...(fromMe ? {} : { unreadCount: { increment: 1 } }),
     },
   });
 
-  // Aplica regra de entrada se contato é novo
-  if (isNewContact) {
+  // Aplica regra de entrada só se o contato é novo E foi ele quem escreveu
+  // (lead chegando). Mensagem sua pra um número novo não cria opportunity
+  // automaticamente.
+  if (isNewContact && !fromMe) {
     await applyEntryRule(connectionId, contact.id);
   }
 
