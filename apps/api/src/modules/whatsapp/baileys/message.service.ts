@@ -113,7 +113,7 @@ async function processOne(connectionId: string, msg: WAMessage) {
     where: phoneIsPlaceholder
       ? { phone: contactPhone }
       : { phone: { in: phoneVariants(contactPhone) } },
-    select: { id: true, ownerId: true, name: true },
+    select: { id: true, ownerId: true, name: true, avatar: true },
   });
 
   // Migração silenciosa: contato antigo salvo como "lid:<id>" agora resolve
@@ -121,7 +121,7 @@ async function processOne(connectionId: string, msg: WAMessage) {
   if (!contact && resolvedFromLid) {
     const legacy = await prisma.contact.findFirst({
       where: { phone: `lid:${idPart}` },
-      select: { id: true, ownerId: true, name: true },
+      select: { id: true, ownerId: true, name: true, avatar: true },
     });
     if (legacy) {
       await prisma.contact.update({
@@ -142,7 +142,7 @@ async function processOne(connectionId: string, msg: WAMessage) {
         name: fallbackName,
         phone: contactPhone,
       },
-      select: { id: true, ownerId: true, name: true },
+      select: { id: true, ownerId: true, name: true, avatar: true },
     });
     contact = created;
     isNewContact = true;
@@ -209,6 +209,24 @@ async function processOne(connectionId: string, msg: WAMessage) {
 
   // Notifica via socket os users autorizados (e admins)
   await broadcastNewMessage(connectionId, conversation.id, created.id, contact.id);
+
+  // Avatar do contato — busca em background quando ainda não temos.
+  // profilePictureUrl pode demorar/falhar (CDN expira ou usuário com
+  // privacidade), então fica fora do path quente.
+  const contactId = contact.id;
+  if (!contact.avatar) {
+    void (async () => {
+      try {
+        const url = (await sock?.profilePictureUrl?.(jid, 'image')) ?? null;
+        if (url) {
+          await prisma.contact.update({ where: { id: contactId }, data: { avatar: url } });
+          await broadcastNewMessage(connectionId, conversation.id, created.id, contactId);
+        }
+      } catch {
+        /* sem foto / privacidade — segue sem avatar */
+      }
+    })();
+  }
 
   // Mídia: baixa em background e atualiza message + reemite
   if (type !== 'TEXT') {
