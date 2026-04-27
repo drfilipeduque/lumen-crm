@@ -208,7 +208,7 @@ async function processOne(connectionId: string, msg: WAMessage) {
   // no pipeline configurado (em qualquer etapa). Assim, lead antigo que
   // voltou a falar vira lead novo; quem já está no funil permanece onde
   // o usuário deixou.
-  await applyEntryRule(connectionId, contact.id);
+  await applyEntryRule(connectionId, contact.id, contact.name);
 
   // Notifica via socket os users autorizados (e admins)
   await broadcastNewMessage(connectionId, conversation.id, created.id, contact.id);
@@ -276,7 +276,7 @@ function extractContent(msg: WAMessage): {
   return { type: 'TEXT', content: '[mensagem nao suportada]', mediaUrl: null };
 }
 
-async function applyEntryRule(connectionId: string, contactId: string) {
+async function applyEntryRule(connectionId: string, contactId: string, contactName: string) {
   const rule = await prisma.connectionEntryRule.findUnique({
     where: { connectionId },
   });
@@ -303,7 +303,7 @@ async function applyEntryRule(connectionId: string, contactId: string) {
 
   await prisma.opportunity.create({
     data: {
-      title: 'Novo lead WhatsApp',
+      title: contactName.trim() || 'Novo lead WhatsApp',
       contactId,
       pipelineId: rule.pipelineId,
       stageId: rule.stageId,
