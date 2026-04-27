@@ -14,6 +14,11 @@ export type WAConnection = {
   avatar: string | null;
   active: boolean;
   webhookUrl: string | null;
+  // Campos OFFICIAL — null pra UNOFFICIAL
+  wabaId: string | null;
+  phoneNumberId: string | null;
+  qualityTier: string | null;
+  coexistenceMode: boolean;
   createdAt: string;
   updatedAt: string;
   users: { id: string; name: string; avatar: string | null }[];
@@ -24,6 +29,21 @@ export type WAConnection = {
     pipelineId: string;
     stageId: string;
   } | null;
+};
+
+export type CreateOfficialInput = {
+  name: string;
+  wabaId: string;
+  phoneNumberId: string;
+  accessToken: string;
+  phone?: string;
+  coexistenceMode?: boolean;
+};
+
+export type ConnectionMetrics = {
+  qualityTier: string | null;
+  last24h: { received: number; sent: number };
+  openConversations: number;
 };
 
 export type EntryRuleSummary = {
@@ -85,6 +105,57 @@ export function useEntryRules() {
   return useQuery({
     queryKey: ['whatsapp-entry-rules'],
     queryFn: async () => (await api.get<EntryRuleSummary[]>(`/whatsapp/entry-rules`)).data,
+  });
+}
+
+// =====================================================================
+// OFFICIAL (Meta Cloud API)
+// =====================================================================
+
+export function useCreateOfficialConnection() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: CreateOfficialInput) =>
+      (await api.post<WAConnection & { warning?: string | null }>(
+        '/whatsapp/connections/official',
+        input,
+      )).data,
+    onSuccess: () => qc.invalidateQueries({ queryKey: KEY }),
+  });
+}
+
+export function useVerifyConnection() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) =>
+      (await api.put(`/whatsapp/connections/${id}/verify`, {})).data,
+    onSuccess: () => qc.invalidateQueries({ queryKey: KEY }),
+  });
+}
+
+export function useUpdateOfficialConnection() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      id,
+      ...patch
+    }: {
+      id: string;
+      name?: string;
+      accessToken?: string;
+      coexistenceMode?: boolean;
+    }) => (await api.put(`/whatsapp/connections/${id}`, patch)).data,
+    onSuccess: () => qc.invalidateQueries({ queryKey: KEY }),
+  });
+}
+
+export function useConnectionMetrics(id: string | null) {
+  return useQuery({
+    queryKey: id ? (['whatsapp-metrics', id] as const) : ['whatsapp-metrics', 'none'],
+    queryFn: async () =>
+      (await api.get<ConnectionMetrics>(`/whatsapp/connections/${id}/metrics`)).data,
+    enabled: !!id,
+    refetchInterval: 60_000,
   });
 }
 
