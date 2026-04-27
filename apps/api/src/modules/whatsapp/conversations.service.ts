@@ -179,6 +179,7 @@ export async function listConversations(
         lastMessagePreview: last ? previewOf(last.type, last.content) : null,
         lastMessageFromMe: last?.fromMe ?? false,
         tags: c.contact.tags,
+        windowExpiresAt: c.windowExpiresAt?.toISOString() ?? null,
       };
     }),
     total,

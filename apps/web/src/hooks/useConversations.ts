@@ -24,6 +24,8 @@ export type ConversationListItem = {
   lastMessagePreview: string | null;
   lastMessageFromMe: boolean;
   tags: { id: string; name: string; color: string }[];
+  // Janela de 24h (apenas conexões OFFICIAL têm). Null = nunca recebeu msg.
+  windowExpiresAt: string | null;
 };
 
 export type ConversationListResponse = {
