@@ -26,6 +26,7 @@ import { conversationMessagesRoutes } from './modules/whatsapp/messages.routes.j
 import { conversationsRoutes } from './modules/whatsapp/conversations.routes.js';
 import { restoreAllSessions } from './modules/whatsapp/baileys/session-manager.js';
 import { metaWebhookRoutes } from './modules/whatsapp/meta/webhook.routes.js';
+import { connectionTemplatesRoutes } from './modules/whatsapp/meta/templates.routes.js';
 import { scriptFoldersRoutes, scriptsRoutes } from './modules/scripts/scripts.routes.js';
 
 const app = Fastify({
@@ -73,6 +74,7 @@ await app.register(opportunityRemindersRoutes, { prefix: '/opportunities' });
 await app.register(filesRoutes, { prefix: '/files' });
 await app.register(remindersRoutes, { prefix: '/reminders' });
 await app.register(whatsappConnectionsRoutes, { prefix: '/whatsapp/connections' });
+await app.register(connectionTemplatesRoutes, { prefix: '/whatsapp/connections' });
 await app.register(whatsappEntryRulesRoutes, { prefix: '/whatsapp/entry-rules' });
 await app.register(conversationsRoutes, { prefix: '/conversations' });
 await app.register(conversationMessagesRoutes, { prefix: '/conversations' });
