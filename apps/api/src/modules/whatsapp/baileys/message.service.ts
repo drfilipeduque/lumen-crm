@@ -203,13 +203,12 @@ async function processOne(connectionId: string, msg: WAMessage) {
     },
   });
 
-  // Aplica regra de entrada sempre que aparece contato novo.
-  // Inclui o caso do atendente puxar conversa do celular: mesmo assim é
-  // um lead novo entrando no funil. Se restringíssemos a !fromMe, quando
-  // o cliente respondesse o contact já existiria e a regra nunca rodaria.
-  if (isNewContact) {
-    await applyEntryRule(connectionId, contact.id);
-  }
+  // Aplica regra de entrada em toda mensagem. applyEntryRule decide se
+  // cria a opportunity: só cria se o contato não tem nenhuma opportunity
+  // no pipeline configurado (em qualquer etapa). Assim, lead antigo que
+  // voltou a falar vira lead novo; quem já está no funil permanece onde
+  // o usuário deixou.
+  await applyEntryRule(connectionId, contact.id);
 
   // Notifica via socket os users autorizados (e admins)
   await broadcastNewMessage(connectionId, conversation.id, created.id, contact.id);
@@ -283,7 +282,14 @@ async function applyEntryRule(connectionId: string, contactId: string) {
   });
   if (!rule || rule.mode !== 'AUTO') return;
 
-  // Cria opportunity inicial
+  // Já tem opp neste pipeline (em qualquer etapa)? Não mexe — usuário
+  // controla a movimentação manualmente pelo kanban/conversa.
+  const existing = await prisma.opportunity.findFirst({
+    where: { contactId, pipelineId: rule.pipelineId },
+    select: { id: true },
+  });
+  if (existing) return;
+
   const stage = await prisma.stage.findUnique({
     where: { id: rule.stageId },
     select: { id: true, pipelineId: true },
