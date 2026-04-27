@@ -13,6 +13,7 @@ import {
   totalUnread,
 } from './conversations.service.js';
 import { prisma } from '../../lib/prisma.js';
+import { getWindowStatus } from './meta/window.service.js';
 import {
   MAX_MESSAGE_FILE_BYTES,
   inferMessageTypeFromMime,
@@ -203,6 +204,23 @@ export const conversationsRoutes: FastifyPluginAsync = async (app) => {
       size: saved.size,
       type: inferMessageTypeFromMime(file.mimetype),
     });
+  });
+
+  // Status da janela de 24h (apenas conexões OFFICIAL têm janela real;
+  // UNOFFICIAL retorna sempre open: true).
+  app.get('/:id/window-status', async (req, reply) => {
+    const p = idParam.safeParse(req.params);
+    if (!p.success) return reply.code(400).send({ error: 'VALIDATION', issues: p.error.flatten() });
+    const conv = await prisma.conversation.findUnique({
+      where: { id: p.data.id },
+      select: { windowExpiresAt: true, connection: { select: { type: true } } },
+    });
+    if (!conv) return reply.code(404).send({ error: 'NOT_FOUND' });
+    if (conv.connection.type === 'UNOFFICIAL') {
+      return reply.send({ open: true, expiresAt: null, hoursRemaining: null, applicable: false });
+    }
+    const status = await getWindowStatus(p.data.id);
+    return reply.send({ ...status, applicable: true });
   });
 
   app.post('/:id/create-opportunity', async (req, reply) => {

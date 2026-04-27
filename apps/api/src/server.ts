@@ -18,6 +18,7 @@ import { filesRoutes, opportunityFilesRoutes } from './modules/files/files.route
 import { opportunityRemindersRoutes, remindersRoutes } from './modules/reminders/reminders.routes.js';
 import { initRealtime } from './lib/realtime.js';
 import { startReminderWorker } from './workers/reminders.js';
+import { startWhatsAppQualityWorker } from './workers/whatsapp-quality.js';
 import {
   whatsappConnectionsRoutes,
   whatsappEntryRulesRoutes,
@@ -89,6 +90,7 @@ try {
   app.log.info(`Lumen API ouvindo em http://${env.API_HOST}:${env.API_PORT}`);
   initRealtime(app, env.CORS_ORIGIN.split(',').map((s) => s.trim()));
   startReminderWorker(app.log);
+  startWhatsAppQualityWorker(app.log);
   // Reabre sessões WhatsApp persistidas
   void restoreAllSessions().catch((err) => app.log.error({ err }, 'restoreAllSessions failed'));
 } catch (err) {
