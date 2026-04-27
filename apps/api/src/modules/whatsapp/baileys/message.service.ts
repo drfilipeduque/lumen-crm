@@ -374,6 +374,19 @@ export async function sendMessageToConversation(
     if (!link) throw new WAMessageError('FORBIDDEN', 'Sem permissão pra essa conexão', 403);
   }
 
+  // Roteamento por tipo de conexão
+  if (conv.connection.type === 'OFFICIAL') {
+    const { loadConvForSend, sendViaMeta, MetaSendError } = await import('../meta/send.service.js');
+    const metaConv = await loadConvForSend(conversationId);
+    if (!metaConv) throw new WAMessageError('NOT_FOUND', 'Conversa não encontrada', 404);
+    try {
+      return await sendViaMeta(metaConv, input);
+    } catch (e) {
+      if (e instanceof MetaSendError) throw new WAMessageError(e.code, e.message, e.status);
+      throw e;
+    }
+  }
+
   const socket = getSocket(conv.connectionId);
   if (!socket) {
     throw new WAMessageError('NOT_CONNECTED', 'Conexão WhatsApp não está ativa', 503);
