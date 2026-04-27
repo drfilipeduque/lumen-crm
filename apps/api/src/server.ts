@@ -25,6 +25,7 @@ import {
 import { conversationMessagesRoutes } from './modules/whatsapp/messages.routes.js';
 import { conversationsRoutes } from './modules/whatsapp/conversations.routes.js';
 import { restoreAllSessions } from './modules/whatsapp/baileys/session-manager.js';
+import { metaWebhookRoutes } from './modules/whatsapp/meta/webhook.routes.js';
 import { scriptFoldersRoutes, scriptsRoutes } from './modules/scripts/scripts.routes.js';
 
 const app = Fastify({
@@ -75,6 +76,9 @@ await app.register(whatsappConnectionsRoutes, { prefix: '/whatsapp/connections' 
 await app.register(whatsappEntryRulesRoutes, { prefix: '/whatsapp/entry-rules' });
 await app.register(conversationsRoutes, { prefix: '/conversations' });
 await app.register(conversationMessagesRoutes, { prefix: '/conversations' });
+// Webhook da Meta — rota pública (sem auth), assinatura HMAC validada na rota.
+// Registrada como plugin isolado pra não vazar o content-type parser custom.
+await app.register(metaWebhookRoutes, { prefix: '/webhooks/meta' });
 await app.register(scriptsRoutes, { prefix: '/scripts' });
 await app.register(scriptFoldersRoutes, { prefix: '/script-folders' });
 

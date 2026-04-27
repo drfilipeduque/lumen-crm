@@ -233,7 +233,7 @@ export async function listTemplates(wabaId: string, token: string): Promise<Meta
   let url: string | undefined = `${GRAPH}/${wabaId}/message_templates?fields=${fields}&limit=200`;
   const out: MetaTemplate[] = [];
   while (url) {
-    const r = await request<Resp>('GET', url, token);
+    const r: Resp = await request<Resp>('GET', url, token);
     out.push(...(r.data ?? []));
     url = r.paging?.next;
   }
