@@ -20,6 +20,7 @@ import {
 } from '../hooks/useWhatsApp';
 import { usePipeline, usePipelines } from '../hooks/usePipelines';
 import { ScriptsTab } from './whatsapp/ScriptsTab';
+import { OfficialTab } from './whatsapp/OfficialTab';
 
 type Tab = 'official' | 'unofficial' | 'scripts' | 'rules';
 
@@ -101,46 +102,10 @@ export function WhatsAppPage() {
       </div>
 
       <div style={{ flex: 1, overflowY: 'auto' }}>
-        {tab === 'official' && <ComingSoonTab title="API Oficial" description="Integração direta com a Cloud API da Meta. Em breve." />}
+        {tab === 'official' && <OfficialTab />}
         {tab === 'unofficial' && <UnofficialTab />}
         {tab === 'scripts' && <ScriptsTab />}
         {tab === 'rules' && <RulesTab />}
-      </div>
-    </div>
-  );
-}
-
-function ComingSoonTab({ title, description }: { title: string; description: string }) {
-  const { tokens: t } = useTheme();
-  return (
-    <div style={{ padding: 40 }}>
-      <div
-        style={{
-          maxWidth: 480,
-          margin: '40px auto 0',
-          textAlign: 'center',
-          background: t.bgElevated,
-          border: `1px dashed ${t.border}`,
-          borderRadius: 14,
-          padding: 32,
-        }}
-      >
-        <div
-          style={{
-            width: 56,
-            height: 56,
-            borderRadius: 14,
-            background: t.bgInput,
-            margin: '0 auto 14px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-          }}
-        >
-          <Icons.Phone s={24} c={t.gold} />
-        </div>
-        <div style={{ fontSize: 15, color: t.text, fontWeight: 500, marginBottom: 6 }}>{title}</div>
-        <div style={{ fontSize: 12.5, color: t.textSubtle }}>{description}</div>
       </div>
     </div>
   );
