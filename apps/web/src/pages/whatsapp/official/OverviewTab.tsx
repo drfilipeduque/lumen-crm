@@ -249,7 +249,7 @@ function Row({ label, value, mono }: { label: string; value: string; mono?: bool
         gridTemplateColumns: '160px 1fr',
         padding: '6px 0',
         fontSize: 12.5,
-        borderBottom: `1px solid ${t.borderFaint ?? t.border}`,
+        borderBottom: `1px solid ${t.border}`,
       }}
     >
       <div style={{ color: t.textDim }}>{label}</div>

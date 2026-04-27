@@ -30,6 +30,8 @@ import { useWhatsAppConnections } from '../hooks/useWhatsApp';
 import { usePipeline, usePipelines } from '../hooks/usePipelines';
 import { useSocketEvent } from '../hooks/useSocketIO';
 import { ScriptsPopover, type RenderedScript } from '../components/conversations/ScriptsPopover';
+import { useWindowStatus, type WindowStatus } from '../hooks/useTemplates';
+import { TemplatePopover } from '../components/conversations/TemplatePopover';
 
 // ============================================================
 // PAGE
@@ -494,6 +496,8 @@ function ChatArea({ conversationId, onClose }: { conversationId: string; onClose
   const me = useAuthStore((s) => s.user);
   const markRead = useMarkRead();
   const send = useSendMessage();
+  // Janela de 24h só importa pra OFFICIAL — pra UNOFFICIAL retorna applicable: false.
+  const windowQ = useWindowStatus(conversationId);
   const [typing, setTyping] = useState(false);
   const typingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -559,7 +563,7 @@ function ChatArea({ conversationId, onClose }: { conversationId: string; onClose
           minHeight: 0,
         }}
       >
-        <ChatHeader detail={detail.data} onClose={onClose} />
+        <ChatHeader detail={detail.data} onClose={onClose} windowStatus={windowQ.data ?? null} />
         <MessagesView
           messages={flatMessages}
           loadOlder={() => messages.fetchNextPage()}
@@ -571,6 +575,9 @@ function ChatArea({ conversationId, onClose }: { conversationId: string; onClose
           conversationId={conversationId}
           contactId={detail.data.contact.id}
           opportunityId={detail.data.activeOpportunity?.id ?? undefined}
+          connectionId={detail.data.connection.id}
+          connectionType={detail.data.connection.type}
+          windowStatus={windowQ.data ?? null}
           disabled={detail.data.connection.status !== 'CONNECTED'}
           onSend={async (input) => {
             await send.mutateAsync({ id: conversationId, ...input });
@@ -590,9 +597,11 @@ function ChatArea({ conversationId, onClose }: { conversationId: string; onClose
 function ChatHeader({
   detail,
   onClose,
+  windowStatus,
 }: {
   detail: ReturnType<typeof useConversation>['data'] & object;
   onClose: () => void;
+  windowStatus: WindowStatus | null;
 }) {
   const { tokens: t } = useTheme();
   const me = useAuthStore((s) => s.user);
@@ -674,6 +683,8 @@ function ChatHeader({
           )}
         </div>
       </div>
+
+      {windowStatus?.applicable && <WindowChip status={windowStatus} />}
 
       {isUnassigned && (
         <button type="button" onClick={handleAssignToMe} style={buttonGhost(t)}>
@@ -822,6 +833,70 @@ function ActionRow({
       <span style={{ flex: 1, minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{label}</span>
     </button>
   );
+}
+
+// ============================================================
+// WINDOW CHIP — janela de 24h da Meta Cloud API
+// ============================================================
+
+function WindowChip({ status }: { status: WindowStatus }) {
+  const { tokens: t } = useTheme();
+  const info = chipInfoFor(status);
+  return (
+    <span
+      title={status.expiresAt ? `Expira em ${new Date(status.expiresAt).toLocaleString('pt-BR')}` : undefined}
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 5,
+        padding: '4px 10px',
+        borderRadius: 999,
+        background: info.bg,
+        color: info.color,
+        border: `1px solid ${info.border}`,
+        fontSize: 10.5,
+        fontWeight: 600,
+        letterSpacing: 0.4,
+        textTransform: 'uppercase',
+        fontFamily: FONT_STACK,
+      }}
+    >
+      <span style={{ width: 6, height: 6, borderRadius: 999, background: info.color }} />
+      {info.label}
+      <span style={{ display: 'none' }}>{t.bg}</span>
+    </span>
+  );
+}
+
+function chipInfoFor(status: WindowStatus): { label: string; color: string; bg: string; border: string } {
+  if (!status.open) {
+    return {
+      label: 'Janela fechada',
+      color: '#f85149',
+      bg: 'rgba(248,81,73,0.10)',
+      border: 'rgba(248,81,73,0.32)',
+    };
+  }
+  const h = status.hoursRemaining ?? 0;
+  if (h <= 2) {
+    return {
+      label: `Fecha em ${formatChipHours(h)}`,
+      color: '#f59e0b',
+      bg: 'rgba(245,158,11,0.10)',
+      border: 'rgba(245,158,11,0.32)',
+    };
+  }
+  return {
+    label: `Janela aberta — ${formatChipHours(h)}`,
+    color: '#D4AF37',
+    bg: 'rgba(212,175,55,0.10)',
+    border: 'rgba(212,175,55,0.32)',
+  };
+}
+
+function formatChipHours(h: number): string {
+  if (h < 1) return `${Math.max(1, Math.round(h * 60))}min`;
+  return `${Math.round(h)}h`;
 }
 
 // ============================================================
@@ -1186,12 +1261,18 @@ function Composer({
   conversationId,
   contactId,
   opportunityId,
+  connectionId,
+  connectionType,
+  windowStatus,
   disabled,
   onSend,
 }: {
   conversationId: string;
   contactId?: string;
   opportunityId?: string;
+  connectionId: string;
+  connectionType: 'OFFICIAL' | 'UNOFFICIAL';
+  windowStatus: WindowStatus | null;
   disabled: boolean;
   onSend: (input: SendMessageInput) => Promise<void>;
 }) {
@@ -1209,6 +1290,13 @@ function Composer({
   const [recording, setRecording] = useState(false);
   const [attachOpen, setAttachOpen] = useState(false);
   const [scriptsOpen, setScriptsOpen] = useState(false);
+  const [templatesOpen, setTemplatesOpen] = useState(false);
+
+  // Conexões OFFICIAL: se a janela estiver fechada, texto livre fica bloqueado
+  // e só templates podem ser enviados.
+  const windowClosed =
+    connectionType === 'OFFICIAL' && windowStatus?.applicable === true && windowStatus.open === false;
+  const composerDisabled = disabled || windowClosed;
   const taRef = useRef<HTMLTextAreaElement>(null);
   const fileImgRef = useRef<HTMLInputElement>(null);
   const fileDocRef = useRef<HTMLInputElement>(null);
@@ -1354,6 +1442,57 @@ function Composer({
         </div>
       )}
 
+      {windowClosed && !disabled && (
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 10,
+            padding: '8px 10px',
+            background: 'rgba(245,158,11,0.10)',
+            border: '1px solid rgba(245,158,11,0.32)',
+            borderRadius: 8,
+            marginBottom: 8,
+            fontSize: 11.5,
+            color: t.text,
+            position: 'relative',
+          }}
+        >
+          <span style={{ color: '#f59e0b' }}>
+            <Icons.Bell s={13} />
+          </span>
+          <span style={{ flex: 1 }}>
+            Janela de 24h fechada. Envie um <strong>template aprovado</strong> pra continuar a
+            conversa — o cliente vai poder responder e a janela reabre.
+          </span>
+          <button
+            type="button"
+            onClick={() => setTemplatesOpen((v) => !v)}
+            style={{
+              background: t.gold,
+              color: '#1a1300',
+              border: 'none',
+              borderRadius: 7,
+              padding: '6px 12px',
+              fontSize: 11.5,
+              fontWeight: 600,
+              cursor: 'pointer',
+              fontFamily: FONT_STACK,
+            }}
+          >
+            Enviar Template
+          </button>
+          {templatesOpen && (
+            <TemplatePopover
+              conversationId={conversationId}
+              connectionId={connectionId}
+              onClose={() => setTemplatesOpen(false)}
+              onSent={() => setTemplatesOpen(false)}
+            />
+          )}
+        </div>
+      )}
+
       {attached && (
         <div
           style={{
@@ -1424,8 +1563,8 @@ function Composer({
               type="button"
               title="Scripts"
               onClick={() => setScriptsOpen((v) => !v)}
-              disabled={disabled}
-              style={{ ...iconButton(t), opacity: disabled ? 0.4 : 1 }}
+              disabled={composerDisabled}
+              style={{ ...iconButton(t), opacity: composerDisabled ? 0.4 : 1 }}
             >
               <Icons.AlignLeft s={16} c={scriptsOpen ? t.gold : t.textDim} />
             </button>
@@ -1439,13 +1578,37 @@ function Composer({
             )}
           </div>
 
+          {/* Botão "Templates" — sempre visível pra OFFICIAL (atalho mesmo
+              com janela aberta), permite enviar template a qualquer momento. */}
+          {connectionType === 'OFFICIAL' && (
+            <div style={{ position: 'relative' }}>
+              <button
+                type="button"
+                title="Templates"
+                onClick={() => setTemplatesOpen((v) => !v)}
+                disabled={disabled}
+                style={{ ...iconButton(t), opacity: disabled ? 0.4 : 1 }}
+              >
+                <Icons.ListChecks s={16} c={templatesOpen ? t.gold : t.textDim} />
+              </button>
+              {templatesOpen && !windowClosed && (
+                <TemplatePopover
+                  conversationId={conversationId}
+                  connectionId={connectionId}
+                  onClose={() => setTemplatesOpen(false)}
+                  onSent={() => setTemplatesOpen(false)}
+                />
+              )}
+            </div>
+          )}
+
           <div ref={attachRef} style={{ position: 'relative' }}>
             <button
               type="button"
               title="Anexar"
               onClick={() => setAttachOpen((v) => !v)}
-              disabled={disabled || upload.isPending}
-              style={{ ...iconButton(t), opacity: disabled ? 0.4 : 1 }}
+              disabled={composerDisabled || upload.isPending}
+              style={{ ...iconButton(t), opacity: composerDisabled ? 0.4 : 1 }}
             >
               <Icons.Paperclip s={16} c={t.textDim} />
             </button>
@@ -1516,8 +1679,16 @@ function Composer({
                 void handleSend();
               }
             }}
-            placeholder={disabled ? 'Conexão offline' : attached ? 'Adicione uma legenda…' : 'Digite uma mensagem…'}
-            disabled={disabled || sending}
+            placeholder={
+              disabled
+                ? 'Conexão offline'
+                : windowClosed
+                  ? 'Janela 24h fechada — envie um template'
+                  : attached
+                    ? 'Adicione uma legenda…'
+                    : 'Digite uma mensagem…'
+            }
+            disabled={composerDisabled || sending}
             style={{
               flex: 1,
               border: 'none',
@@ -1537,7 +1708,7 @@ function Composer({
             <button
               type="button"
               onClick={handleSend}
-              disabled={disabled || sending}
+              disabled={composerDisabled || sending}
               title="Enviar"
               style={{
                 display: 'inline-flex',
@@ -1559,7 +1730,7 @@ function Composer({
             <button
               type="button"
               onClick={() => setRecording(true)}
-              disabled={disabled}
+              disabled={composerDisabled}
               title="Gravar áudio"
               style={{
                 display: 'inline-flex',
@@ -1571,8 +1742,8 @@ function Composer({
                 borderRadius: 8,
                 background: t.bgInput,
                 color: t.textDim,
-                cursor: disabled ? 'not-allowed' : 'pointer',
-                opacity: disabled ? 0.4 : 1,
+                cursor: composerDisabled ? 'not-allowed' : 'pointer',
+                opacity: composerDisabled ? 0.4 : 1,
               }}
             >
               <Icons.Mic s={15} c={t.textDim} />
