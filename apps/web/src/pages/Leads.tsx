@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import axios from 'axios';
 import { IMaskInput } from 'react-imask';
 import { useTheme } from '../lib/ThemeContext';
@@ -54,6 +55,17 @@ export function LeadsPage() {
   const [creating, setCreating] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [viewingId, setViewingId] = useState<string | null>(null);
+
+  // ?focus=<contactId> abre o modal de edição direto (vindo das conversas)
+  const [searchParams, setSearchParams] = useSearchParams();
+  useEffect(() => {
+    const focus = searchParams.get('focus');
+    if (!focus) return;
+    setEditingId(focus);
+    const next = new URLSearchParams(searchParams);
+    next.delete('focus');
+    setSearchParams(next, { replace: true });
+  }, [searchParams, setSearchParams]);
 
   useEffect(() => {
     const id = setTimeout(() => setDebouncedSearch(search.trim()), 300);
