@@ -28,6 +28,16 @@ const envSchema = z.object({
   WHATSAPP_ENCRYPTION_KEY: z
     .string()
     .default('00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff'),
+  // ==== Meta Cloud API ====
+  // App Secret usado pra validar a assinatura HMAC dos webhooks (x-hub-signature-256).
+  META_APP_SECRET: z.string().optional(),
+  // Versão da Graph API; default mantém compat com endpoints atuais.
+  META_GRAPH_VERSION: z.string().default('v21.0'),
+  // Token usado no handshake de verificação do webhook (hub.verify_token).
+  META_WEBHOOK_VERIFY_TOKEN: z.string().default('lumen-meta-verify'),
+  // URL pública usada pra registrar webhook na Meta. Sem isso, registramos
+  // o webhook mas não funciona em produção; útil em dev via tunelamento.
+  PUBLIC_API_URL: z.string().url().optional(),
 });
 
 export const env = envSchema.parse(process.env);
