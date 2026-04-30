@@ -30,6 +30,8 @@ import { restoreAllSessions } from './modules/whatsapp/baileys/session-manager.j
 import { metaWebhookRoutes } from './modules/whatsapp/meta/webhook.routes.js';
 import { connectionTemplatesRoutes } from './modules/whatsapp/meta/templates.routes.js';
 import { scriptFoldersRoutes, scriptsRoutes } from './modules/scripts/scripts.routes.js';
+import { automationRoutes } from './modules/automation/automation.routes.js';
+import { aiIntegrationRoutes } from './modules/automation/ai-integration.routes.js';
 
 const app = Fastify({
   logger: {
@@ -85,6 +87,8 @@ await app.register(conversationMessagesRoutes, { prefix: '/conversations' });
 await app.register(metaWebhookRoutes, { prefix: '/webhooks/meta' });
 await app.register(scriptsRoutes, { prefix: '/scripts' });
 await app.register(scriptFoldersRoutes, { prefix: '/script-folders' });
+await app.register(automationRoutes, { prefix: '/automations' });
+await app.register(aiIntegrationRoutes, { prefix: '/ai-integrations' });
 
 try {
   await app.listen({ host: env.API_HOST, port: env.API_PORT });
