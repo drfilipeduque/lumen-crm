@@ -19,6 +19,7 @@ import { opportunityRemindersRoutes, remindersRoutes } from './modules/reminders
 import { initRealtime } from './lib/realtime.js';
 import { startReminderWorker } from './workers/reminders.js';
 import { startWhatsAppQualityWorker } from './workers/whatsapp-quality.js';
+import { startAutomationEngine } from './workers/automation.js';
 import {
   whatsappConnectionsRoutes,
   whatsappEntryRulesRoutes,
@@ -91,6 +92,7 @@ try {
   initRealtime(app, env.CORS_ORIGIN.split(',').map((s) => s.trim()));
   startReminderWorker(app.log);
   startWhatsAppQualityWorker(app.log);
+  startAutomationEngine(app.log);
   // Reabre sessões WhatsApp persistidas
   void restoreAllSessions().catch((err) => app.log.error({ err }, 'restoreAllSessions failed'));
 } catch (err) {
