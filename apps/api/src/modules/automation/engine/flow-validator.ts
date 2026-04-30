@@ -27,15 +27,22 @@ export type FlowValidationError = {
 // ============================================================================
 
 const triggerConfigSchemas: Record<string, z.ZodTypeAny> = {
-  opportunity_created: z.object({}).passthrough(),
+  opportunity_created: z
+    .object({
+      pipelineId: z.string().optional(),
+      stageId: z.string().optional(),
+    })
+    .passthrough(),
   opportunity_stage_changed: z
     .object({
+      pipelineId: z.string().optional(),
       fromStageId: z.string().optional(),
       toStageId: z.string().optional(),
     })
     .passthrough(),
   opportunity_stale_in_stage: z
     .object({
+      pipelineId: z.string().optional(),
       stageId: z.string().optional(),
       minutes: z.number().int().nonnegative().optional(),
       hours: z.number().int().nonnegative().optional(),
@@ -44,6 +51,8 @@ const triggerConfigSchemas: Record<string, z.ZodTypeAny> = {
     .passthrough(),
   opportunity_inactive: z
     .object({
+      pipelineId: z.string().optional(),
+      stageId: z.string().optional(),
       minutes: z.number().int().nonnegative().optional(),
       hours: z.number().int().nonnegative().optional(),
       days: z.number().int().nonnegative().optional(),
@@ -52,8 +61,19 @@ const triggerConfigSchemas: Record<string, z.ZodTypeAny> = {
   tag_added: z.object({ tagId: z.string().optional() }).passthrough(),
   tag_removed: z.object({ tagId: z.string().optional() }).passthrough(),
   custom_field_changed: z.object({ customFieldId: z.string().optional() }).passthrough(),
-  owner_changed: z.object({}).passthrough(),
-  due_date_approaching: z.object({ withinHours: z.number().positive() }).passthrough(),
+  owner_changed: z
+    .object({
+      pipelineId: z.string().optional(),
+      stageId: z.string().optional(),
+    })
+    .passthrough(),
+  due_date_approaching: z
+    .object({
+      pipelineId: z.string().optional(),
+      stageId: z.string().optional(),
+      withinHours: z.number().positive(),
+    })
+    .passthrough(),
   message_received: z.object({}).passthrough(),
   message_sent: z.object({}).passthrough(),
   keyword_detected: z
@@ -62,8 +82,18 @@ const triggerConfigSchemas: Record<string, z.ZodTypeAny> = {
       matchType: z.enum(['any', 'all']).optional(),
     })
     .passthrough(),
-  opportunity_won: z.object({}).passthrough(),
-  opportunity_lost: z.object({}).passthrough(),
+  opportunity_won: z
+    .object({
+      pipelineId: z.string().optional(),
+      stageId: z.string().optional(),
+    })
+    .passthrough(),
+  opportunity_lost: z
+    .object({
+      pipelineId: z.string().optional(),
+      stageId: z.string().optional(),
+    })
+    .passthrough(),
   scheduled: z
     .object({
       hour: z.number().int().min(0).max(23),

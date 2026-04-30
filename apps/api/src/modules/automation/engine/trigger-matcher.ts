@@ -53,6 +53,18 @@ export function matchesTriggerConfig(
   const cfg = (triggerConfig ?? {}) as Record<string, unknown>;
   const data = event.data as Record<string, unknown>;
 
+  // Filtro genérico por funil/etapa pros triggers do domínio Oportunidade.
+  // Se a config tem pipelineId/stageId mas o payload não traz (eventos antigos
+  // ou de domínio diferente), o filtro é ignorado (não bloqueia).
+  const cfgPipelineId = cfg.pipelineId as string | undefined;
+  const cfgStageId = cfg.stageId as string | undefined;
+  if (cfgPipelineId && typeof data.pipelineId === 'string' && data.pipelineId !== cfgPipelineId) {
+    return false;
+  }
+  if (cfgStageId && typeof data.stageId === 'string' && data.stageId !== cfgStageId) {
+    return false;
+  }
+
   switch (triggerType) {
     case 'opportunity_stage_changed': {
       const from = cfg.fromStageId as string | undefined;

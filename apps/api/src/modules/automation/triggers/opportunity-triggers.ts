@@ -4,12 +4,21 @@
 import type { TriggerDefinition } from './types.js';
 
 export const opportunityTriggers: TriggerDefinition[] = [
-  { subtype: 'opportunity_created', label: 'Oportunidade criada', kind: 'event', configFields: [] },
+  {
+    subtype: 'opportunity_created',
+    label: 'Oportunidade criada',
+    kind: 'event',
+    configFields: [
+      { name: 'pipelineId', type: 'pipeline', required: false, label: 'Funil (opcional)' },
+      { name: 'stageId', type: 'stage', required: false, label: 'Etapa (opcional)' },
+    ],
+  },
   {
     subtype: 'opportunity_stage_changed',
     label: 'Mudou de etapa',
     kind: 'event',
     configFields: [
+      { name: 'pipelineId', type: 'pipeline', required: false, label: 'Funil (opcional)' },
       { name: 'fromStageId', type: 'stage', required: false, label: 'Da etapa' },
       { name: 'toStageId', type: 'stage', required: false, label: 'Pra etapa' },
     ],
@@ -19,6 +28,7 @@ export const opportunityTriggers: TriggerDefinition[] = [
     label: 'Parado na etapa há…',
     kind: 'cron',
     configFields: [
+      { name: 'pipelineId', type: 'pipeline', required: false, label: 'Funil (opcional)' },
       { name: 'stageId', type: 'stage', required: false, label: 'Etapa' },
       { name: 'minutes', type: 'number', required: false, label: 'Minutos' },
       { name: 'hours', type: 'number', required: false, label: 'Horas' },
@@ -30,6 +40,8 @@ export const opportunityTriggers: TriggerDefinition[] = [
     label: 'Sem atividade há…',
     kind: 'cron',
     configFields: [
+      { name: 'pipelineId', type: 'pipeline', required: false, label: 'Funil (opcional)' },
+      { name: 'stageId', type: 'stage', required: false, label: 'Etapa (opcional)' },
       { name: 'minutes', type: 'number', required: false, label: 'Minutos' },
       { name: 'hours', type: 'number', required: false, label: 'Horas' },
       { name: 'days', type: 'number', required: false, label: 'Dias' },
@@ -53,13 +65,41 @@ export const opportunityTriggers: TriggerDefinition[] = [
     kind: 'event',
     configFields: [{ name: 'customFieldId', type: 'customField', required: false, label: 'Campo' }],
   },
-  { subtype: 'owner_changed', label: 'Responsável alterado', kind: 'event', configFields: [] },
+  {
+    subtype: 'owner_changed',
+    label: 'Responsável alterado',
+    kind: 'event',
+    configFields: [
+      { name: 'pipelineId', type: 'pipeline', required: false, label: 'Funil (opcional)' },
+      { name: 'stageId', type: 'stage', required: false, label: 'Etapa (opcional)' },
+    ],
+  },
   {
     subtype: 'due_date_approaching',
     label: 'Prazo se aproximando',
     kind: 'cron',
-    configFields: [{ name: 'withinHours', type: 'number', required: true, label: 'Dentro de (horas)' }],
+    configFields: [
+      { name: 'pipelineId', type: 'pipeline', required: false, label: 'Funil (opcional)' },
+      { name: 'stageId', type: 'stage', required: false, label: 'Etapa (opcional)' },
+      { name: 'withinHours', type: 'number', required: true, label: 'Dentro de (horas)' },
+    ],
   },
-  { subtype: 'opportunity_won', label: 'Ganha', kind: 'event', configFields: [] },
-  { subtype: 'opportunity_lost', label: 'Perdida', kind: 'event', configFields: [] },
+  {
+    subtype: 'opportunity_won',
+    label: 'Ganha',
+    kind: 'event',
+    configFields: [
+      { name: 'pipelineId', type: 'pipeline', required: false, label: 'Funil (opcional)' },
+      { name: 'stageId', type: 'stage', required: false, label: 'Etapa (opcional)' },
+    ],
+  },
+  {
+    subtype: 'opportunity_lost',
+    label: 'Perdida',
+    kind: 'event',
+    configFields: [
+      { name: 'pipelineId', type: 'pipeline', required: false, label: 'Funil (opcional)' },
+      { name: 'stageId', type: 'stage', required: false, label: 'Etapa (opcional)' },
+    ],
+  },
 ];

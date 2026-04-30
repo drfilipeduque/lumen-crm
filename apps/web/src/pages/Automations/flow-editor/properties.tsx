@@ -193,10 +193,16 @@ function ConfigForm({
             );
           }
           if (f.type === 'stage' || f.name === 'stageId' || f.name === 'fromStageId' || f.name === 'toStageId') {
+            const noPipeline = !selectedPipelineId;
             return (
               <Field key={f.name} label={f.label}>
-                <select value={(v as string) ?? ''} onChange={(e) => setField(f.name, e.target.value)} style={input(t)}>
-                  <option value="">— escolha —</option>
+                <select
+                  value={(v as string) ?? ''}
+                  onChange={(e) => setField(f.name, e.target.value)}
+                  disabled={noPipeline}
+                  style={{ ...input(t), opacity: noPipeline ? 0.5 : 1 }}
+                >
+                  <option value="">{noPipeline ? '— selecione um funil primeiro —' : '— escolha —'}</option>
                   {stages.map((s) => (
                     <option key={s.id} value={s.id}>
                       {s.name}

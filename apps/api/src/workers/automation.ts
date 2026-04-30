@@ -119,13 +119,18 @@ async function runCronTick(_kind: string, log: FastifyBaseLogger) {
       const cfg = (a.triggerConfig as Record<string, unknown> | null) ?? {};
       switch (a.triggerType) {
         case 'opportunity_stale_in_stage': {
+          const pipelineId = cfg.pipelineId as string | undefined;
           const stageId = cfg.stageId as string | undefined;
           const minutes = Number(cfg.minutes ?? 0) + Number(cfg.hours ?? 0) * 60 + Number(cfg.days ?? 0) * 1440;
           if (minutes <= 0) continue;
           const cutoff = new Date(now.getTime() - minutes * 60_000);
           const ops = await prisma.opportunity.findMany({
-            where: { stageId: stageId ?? undefined, updatedAt: { lt: cutoff } },
-            select: { id: true, contactId: true },
+            where: {
+              pipelineId: pipelineId ?? undefined,
+              stageId: stageId ?? undefined,
+              updatedAt: { lt: cutoff },
+            },
+            select: { id: true, contactId: true, pipelineId: true, stageId: true },
             take: 100,
           });
           for (const op of ops) {
@@ -134,43 +139,55 @@ async function runCronTick(_kind: string, log: FastifyBaseLogger) {
             await fireDirect(a.id, 'cron:stale', {
               type: 'opportunity.cron.stale' as never,
               entityId: op.id,
-              data: { opportunityId: op.id, contactId: op.contactId },
+              data: { opportunityId: op.id, contactId: op.contactId, pipelineId: op.pipelineId, stageId: op.stageId },
             });
           }
           break;
         }
         case 'opportunity_inactive': {
           // Sem mensagem nem update há X tempo
+          const pipelineId = cfg.pipelineId as string | undefined;
+          const stageId = cfg.stageId as string | undefined;
           const minutes = Number(cfg.minutes ?? 0) + Number(cfg.hours ?? 0) * 60 + Number(cfg.days ?? 0) * 1440;
           if (minutes <= 0) continue;
           const cutoff = new Date(now.getTime() - minutes * 60_000);
           const ops = await prisma.opportunity.findMany({
-            where: { updatedAt: { lt: cutoff } },
-            select: { id: true, contactId: true },
+            where: {
+              pipelineId: pipelineId ?? undefined,
+              stageId: stageId ?? undefined,
+              updatedAt: { lt: cutoff },
+            },
+            select: { id: true, contactId: true, pipelineId: true, stageId: true },
             take: 100,
           });
           for (const op of ops) {
             await fireDirect(a.id, 'cron:inactive', {
               type: 'opportunity.cron.inactive' as never,
               entityId: op.id,
-              data: { opportunityId: op.id, contactId: op.contactId },
+              data: { opportunityId: op.id, contactId: op.contactId, pipelineId: op.pipelineId, stageId: op.stageId },
             });
           }
           break;
         }
         case 'due_date_approaching': {
+          const pipelineId = cfg.pipelineId as string | undefined;
+          const stageId = cfg.stageId as string | undefined;
           const within = Number(cfg.withinHours ?? 24);
           const upper = new Date(now.getTime() + within * 3_600_000);
           const ops = await prisma.opportunity.findMany({
-            where: { dueDate: { gte: now, lte: upper } },
-            select: { id: true, contactId: true },
+            where: {
+              pipelineId: pipelineId ?? undefined,
+              stageId: stageId ?? undefined,
+              dueDate: { gte: now, lte: upper },
+            },
+            select: { id: true, contactId: true, pipelineId: true, stageId: true },
             take: 100,
           });
           for (const op of ops) {
             await fireDirect(a.id, 'cron:due', {
               type: 'opportunity.cron.due' as never,
               entityId: op.id,
-              data: { opportunityId: op.id, contactId: op.contactId },
+              data: { opportunityId: op.id, contactId: op.contactId, pipelineId: op.pipelineId, stageId: op.stageId },
             });
           }
           break;

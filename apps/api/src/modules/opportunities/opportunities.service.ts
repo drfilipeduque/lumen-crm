@@ -417,6 +417,10 @@ export async function updateOpportunity(
   await logOpportunityChange(id, prev, input, actor.id);
 
   // Eventos de domínio pra automation engine.
+  // pipelineId/stageId atuais incluídos pra trigger-matcher filtrar por funil/etapa.
+  const pipelineId = prev.pipelineId;
+  const currentStageId = input.stageId ?? prev.stageId;
+
   if (input.stageId && input.stageId !== prev.stageId) {
     const next = await prisma.stage.findUnique({
       where: { id: input.stageId },
@@ -426,41 +430,41 @@ export async function updateOpportunity(
       type: 'opportunity.stage_changed',
       entityId: id,
       actorId: actor.id,
-      data: { opportunityId: id, fromStageId: prev.stageId, toStageId: input.stageId, contactId: prev.contactId, userId: actor.id },
+      data: { opportunityId: id, pipelineId, fromStageId: prev.stageId, toStageId: input.stageId, stageId: input.stageId, contactId: prev.contactId, userId: actor.id },
     });
     if (next?.isClosedWon) {
-      eventBus.publish({ type: 'opportunity.won', entityId: id, actorId: actor.id, data: { opportunityId: id, contactId: prev.contactId, userId: actor.id } });
+      eventBus.publish({ type: 'opportunity.won', entityId: id, actorId: actor.id, data: { opportunityId: id, pipelineId, stageId: input.stageId, contactId: prev.contactId, userId: actor.id } });
     }
     if (next?.isClosedLost) {
-      eventBus.publish({ type: 'opportunity.lost', entityId: id, actorId: actor.id, data: { opportunityId: id, contactId: prev.contactId, userId: actor.id } });
+      eventBus.publish({ type: 'opportunity.lost', entityId: id, actorId: actor.id, data: { opportunityId: id, pipelineId, stageId: input.stageId, contactId: prev.contactId, userId: actor.id } });
     }
   }
   if (input.priority !== undefined && input.priority !== prev.priority) {
-    eventBus.publish({ type: 'opportunity.priority_changed', entityId: id, actorId: actor.id, data: { opportunityId: id, contactId: prev.contactId, priority: input.priority, userId: actor.id } });
+    eventBus.publish({ type: 'opportunity.priority_changed', entityId: id, actorId: actor.id, data: { opportunityId: id, pipelineId, stageId: currentStageId, contactId: prev.contactId, priority: input.priority, userId: actor.id } });
   }
   if (input.value !== undefined && Number(prev.value) !== input.value) {
-    eventBus.publish({ type: 'opportunity.value_changed', entityId: id, actorId: actor.id, data: { opportunityId: id, contactId: prev.contactId, value: input.value, userId: actor.id } });
+    eventBus.publish({ type: 'opportunity.value_changed', entityId: id, actorId: actor.id, data: { opportunityId: id, pipelineId, stageId: currentStageId, contactId: prev.contactId, value: input.value, userId: actor.id } });
   }
   if (input.ownerId !== undefined && prev.ownerId !== input.ownerId) {
-    eventBus.publish({ type: 'opportunity.owner_changed', entityId: id, actorId: actor.id, data: { opportunityId: id, contactId: prev.contactId, fromOwnerId: prev.ownerId, toOwnerId: input.ownerId, userId: actor.id } });
+    eventBus.publish({ type: 'opportunity.owner_changed', entityId: id, actorId: actor.id, data: { opportunityId: id, pipelineId, stageId: currentStageId, contactId: prev.contactId, fromOwnerId: prev.ownerId, toOwnerId: input.ownerId, userId: actor.id } });
   }
   if (input.tagIds !== undefined) {
     const before = new Set(prev.tags.map((t) => t.id));
     const after = new Set(input.tagIds);
     for (const tid of input.tagIds) {
       if (!before.has(tid)) {
-        eventBus.publish({ type: 'opportunity.tag_added', entityId: id, actorId: actor.id, data: { opportunityId: id, contactId: prev.contactId, tagId: tid, userId: actor.id } });
+        eventBus.publish({ type: 'opportunity.tag_added', entityId: id, actorId: actor.id, data: { opportunityId: id, pipelineId, stageId: currentStageId, contactId: prev.contactId, tagId: tid, userId: actor.id } });
       }
     }
     for (const tid of before) {
       if (!after.has(tid)) {
-        eventBus.publish({ type: 'opportunity.tag_removed', entityId: id, actorId: actor.id, data: { opportunityId: id, contactId: prev.contactId, tagId: tid, userId: actor.id } });
+        eventBus.publish({ type: 'opportunity.tag_removed', entityId: id, actorId: actor.id, data: { opportunityId: id, pipelineId, stageId: currentStageId, contactId: prev.contactId, tagId: tid, userId: actor.id } });
       }
     }
   }
   if (input.customFields) {
     for (const [customFieldId, value] of Object.entries(input.customFields)) {
-      eventBus.publish({ type: 'opportunity.field_updated', entityId: id, actorId: actor.id, data: { opportunityId: id, contactId: prev.contactId, customFieldId, value, userId: actor.id } });
+      eventBus.publish({ type: 'opportunity.field_updated', entityId: id, actorId: actor.id, data: { opportunityId: id, pipelineId, stageId: currentStageId, contactId: prev.contactId, customFieldId, value, userId: actor.id } });
     }
   }
 
