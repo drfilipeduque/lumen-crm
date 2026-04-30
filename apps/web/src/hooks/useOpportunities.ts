@@ -201,3 +201,41 @@ export function useReorderOpportunity() {
     onSettled: () => invalidateBoard(qc),
   });
 }
+
+export type TransferStrategy = 'KEEP_COMPATIBLE' | 'DISCARD_ALL' | 'MAP';
+
+export type TransferInput = {
+  targetPipelineId: string;
+  targetStageId: string;
+  customFieldStrategy?: TransferStrategy;
+  fieldMapping?: { fromCustomFieldId: string; toCustomFieldId: string }[];
+  keepHistory?: boolean;
+  keepTags?: boolean;
+  keepReminders?: boolean;
+  keepFiles?: boolean;
+};
+
+export type TransferResult = {
+  opportunityId: string;
+  fromPipelineId: string;
+  fromStageId: string;
+  toPipelineId: string;
+  toStageId: string;
+  removedCustomFields: string[];
+  mappedCustomFields: { from: string; to: string }[];
+  removedTagIds: string[];
+  cancelledReminderIds: string[];
+};
+
+export function useTransferOpportunity() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, ...input }: { id: string } & TransferInput) =>
+      (await api.put<TransferResult>(`/opportunities/${id}/transfer`, input)).data,
+    onSuccess: (_, vars) => {
+      invalidateBoard(qc);
+      qc.invalidateQueries({ queryKey: ['opportunity', vars.id] });
+      qc.invalidateQueries({ queryKey: ['opportunity-history', vars.id] });
+    },
+  });
+}

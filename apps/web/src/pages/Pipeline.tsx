@@ -29,6 +29,7 @@ import { usePipelines } from '../hooks/usePipelines';
 import { useTags, type Tag } from '../hooks/useTags';
 import { useTeam, type TeamMember } from '../hooks/useTeam';
 import { StartCadenceForTarget } from '../components/cadences/StartCadenceForTarget';
+import { TransferOpportunityModal } from '../components/TransferOpportunityModal';
 import {
   buildBoardExportUrl,
   useBoard,
@@ -1759,6 +1760,7 @@ function OpportunityModal({
   const [contacts, setContacts] = useState<{ id: string; name: string; phone: string }[]>([]);
   const [contactDropdownOpen, setContactDropdownOpen] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [transferOpen, setTransferOpen] = useState(false);
   const contactRef = useRef<HTMLDivElement>(null);
   useClickOutside(contactRef, () => setContactDropdownOpen(false), contactDropdownOpen);
 
@@ -2026,23 +2028,42 @@ function OpportunityModal({
 
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
           {isEdit ? (
-            <button
-              type="button"
-              onClick={() => setConfirmDelete(true)}
-              style={{
-                background: 'transparent',
-                color: t.danger,
-                border: `1px solid ${hexAlpha(t.danger, 0.4)}`,
-                borderRadius: 8,
-                padding: '7px 12px',
-                fontSize: 12,
-                fontWeight: 500,
-                cursor: 'pointer',
-                fontFamily: FONT_STACK,
-              }}
-            >
-              Excluir
-            </button>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button
+                type="button"
+                onClick={() => setConfirmDelete(true)}
+                style={{
+                  background: 'transparent',
+                  color: t.danger,
+                  border: `1px solid ${hexAlpha(t.danger, 0.4)}`,
+                  borderRadius: 8,
+                  padding: '7px 12px',
+                  fontSize: 12,
+                  fontWeight: 500,
+                  cursor: 'pointer',
+                  fontFamily: FONT_STACK,
+                }}
+              >
+                Excluir
+              </button>
+              <button
+                type="button"
+                onClick={() => setTransferOpen(true)}
+                style={{
+                  background: 'transparent',
+                  color: t.text,
+                  border: `1px solid ${t.border}`,
+                  borderRadius: 8,
+                  padding: '7px 12px',
+                  fontSize: 12,
+                  fontWeight: 500,
+                  cursor: 'pointer',
+                  fontFamily: FONT_STACK,
+                }}
+              >
+                Transferir
+              </button>
+            </div>
           ) : (
             <span />
           )}
@@ -2082,6 +2103,16 @@ function OpportunityModal({
         danger
         onConfirm={handleDelete}
         onClose={() => setConfirmDelete(false)}
+      />
+
+      <TransferOpportunityModal
+        open={transferOpen}
+        opportunityId={isEdit ? (opportunityId ?? null) : null}
+        onClose={() => setTransferOpen(false)}
+        onTransferred={() => {
+          // Após transferir, a opp não pertence mais ao funil atual — fecha a popup
+          onClose();
+        }}
       />
     </Modal>
   );

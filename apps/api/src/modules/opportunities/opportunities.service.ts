@@ -736,6 +736,12 @@ export async function transferOpportunity(
   const cancelledReminderIds = !keepReminders ? opp.reminders.map((r) => r.id) : [];
   const removedTagIds = !keepTags ? opp.tags.map((t) => t.id) : [];
 
+  // Pré-busca nomes pra enriquecer metadata do histórico (UX).
+  const [fromPipe, toPipe] = await Promise.all([
+    prisma.pipeline.findUnique({ where: { id: fromPipelineId }, select: { name: true } }),
+    prisma.pipeline.findUnique({ where: { id: input.targetPipelineId }, select: { name: true } }),
+  ]);
+
   await prisma.$transaction(async (tx) => {
     // Posiciona no fim da coluna destino.
     const last = await tx.opportunity.aggregate({
@@ -796,8 +802,10 @@ export async function transferOpportunity(
         userId: actor.id,
         metadata: {
           fromPipelineId,
+          fromPipelineName: fromPipe?.name ?? null,
           fromStageId,
           toPipelineId: input.targetPipelineId,
+          toPipelineName: toPipe?.name ?? null,
           toStageId: input.targetStageId,
           strategy,
           removedCustomFields,

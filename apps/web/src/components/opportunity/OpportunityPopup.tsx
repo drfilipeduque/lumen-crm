@@ -1435,6 +1435,7 @@ function HistoricoTab({ opportunityId }: { opportunityId: string }) {
     { value: 'REMINDER', label: 'Lembretes' },
     { value: 'FILE', label: 'Arquivos' },
     { value: 'DESCRIPTION', label: 'Descrição' },
+    { value: 'TRANSFER', label: 'Transferências entre funis' },
   ];
 
   return (
@@ -1549,6 +1550,8 @@ function iconForAction(action: string): { icon: IconName; color: string } {
       return { icon: 'Link', color: '#94a3b8' };
     case 'DESCRIPTION_UPDATED':
       return { icon: 'Edit', color: '#3b82f6' };
+    case 'TRANSFERRED':
+      return { icon: 'ChevronR', color: '#D4AF37' };
     default:
       return { icon: 'Dot', color: '#94a3b8' };
   }
@@ -1585,6 +1588,15 @@ function describeAction(e: HistoryEntry): string {
       return `removeu o arquivo "${m.name ?? '—'}"`;
     case 'DESCRIPTION_UPDATED':
       return 'atualizou a descrição';
+    case 'TRANSFERRED': {
+      const fromName = (m.fromPipelineName as string | undefined) ?? '—';
+      const toName = (m.toPipelineName as string | undefined) ?? '—';
+      const fromStage = e.fromStageName ?? '—';
+      const toStage = e.toStageName ?? '—';
+      // metadata salva pipelineId, então só temos id pipelineId no payload do
+      // backend; usamos fromStageName/toStageName que já vêm via include.
+      return `transferiu de "${fromStage}" para "${toStage}" (${fromName} → ${toName})`;
+    }
     default:
       return e.action;
   }
