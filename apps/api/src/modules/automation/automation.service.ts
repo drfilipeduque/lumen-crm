@@ -23,6 +23,7 @@ import {
 } from './engine/flow-runner.js';
 import { buildContextFromEvent, type ExecutionContext } from './engine/context.js';
 import { enqueueExecution, enqueueResume } from './queues.js';
+import { validateFlow, type FlowValidationError } from './engine/flow-validator.js';
 
 export class AutomationError extends Error {
   status: number;
@@ -65,6 +66,14 @@ export async function getAutomation(id: string) {
 }
 
 export async function createAutomation(input: AutomationCreateInput) {
+  // Só bloqueia quando o usuário tenta SALVAR ATIVO. Em rascunho (active=false)
+  // tolera erros de validação pra deixar continuar editando.
+  if (input.active !== false) {
+    const errs = validateFlow(input.flow);
+    if (errs.length > 0) {
+      throw new AutomationValidationError(errs);
+    }
+  }
   const { triggerType, triggerConfig } = denormalizeTrigger(input.flow);
   return prisma.automation.create({
     data: {
@@ -77,11 +86,34 @@ export async function createAutomation(input: AutomationCreateInput) {
   });
 }
 
+export class AutomationValidationError extends Error {
+  errors: FlowValidationError[];
+  status = 400;
+  code = 'FLOW_INVALID';
+  constructor(errors: FlowValidationError[]) {
+    super('Fluxo inválido');
+    this.errors = errors;
+  }
+}
+
+// Validação standalone — usada pelo header do editor pra mostrar status.
+export function validateFlowExternal(flow: Flow): FlowValidationError[] {
+  return validateFlow(flow);
+}
+
 export async function updateAutomation(id: string, input: Partial<AutomationCreateInput>) {
   const data: Prisma.AutomationUpdateInput = {};
   if (input.name !== undefined) data.name = input.name;
   if (input.active !== undefined) data.active = input.active;
   if (input.flow !== undefined) {
+    // Bloqueia se vai ficar ativo (input.active=true ou já era ativo).
+    const willBeActive = input.active !== undefined
+      ? input.active
+      : (await getAutomation(id)).active;
+    if (willBeActive) {
+      const errs = validateFlow(input.flow);
+      if (errs.length > 0) throw new AutomationValidationError(errs);
+    }
     const { triggerType, triggerConfig } = denormalizeTrigger(input.flow);
     data.triggerType = triggerType;
     data.triggerConfig = triggerConfig;

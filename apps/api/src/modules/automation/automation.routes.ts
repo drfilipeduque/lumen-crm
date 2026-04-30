@@ -5,6 +5,7 @@ import type { FastifyPluginAsync, FastifyReply } from 'fastify';
 import { authenticate, requireAnyRole } from '../auth/auth.middleware.js';
 import {
   AutomationError,
+  AutomationValidationError,
   createAutomation,
   deleteAutomation,
   dryRunAutomation,
@@ -12,6 +13,7 @@ import {
   listAutomations,
   toggleAutomation,
   updateAutomation,
+  validateFlowExternal,
 } from './automation.service.js';
 import {
   createAutomationSchema,
@@ -25,6 +27,9 @@ import type { Flow } from './engine/flow-runner.js';
 import type { EventPayload } from './engine/event-bus.js';
 
 function send(reply: FastifyReply, e: unknown) {
+  if (e instanceof AutomationValidationError) {
+    return reply.code(400).send({ error: 'FLOW_INVALID', message: e.message, errors: e.errors });
+  }
   if (e instanceof AutomationError) return reply.code(e.status).send({ error: e.code, message: e.message });
   throw e;
 }
@@ -40,6 +45,16 @@ export const automationRoutes: FastifyPluginAsync = async (app) => {
     triggers: allTriggerDefinitions,
     actions: allActionDefinitions,
   }));
+
+  // Validação ad-hoc de um flow (sem persistir). Útil pra header do editor.
+  app.post('/validate', { preHandler: requireAnyRole(['ADMIN']) }, async (req, reply) => {
+    const body = (req.body as { flow?: unknown })?.flow;
+    if (!body || typeof body !== 'object') {
+      return reply.code(400).send({ error: 'VALIDATION', message: 'flow obrigatório' });
+    }
+    const errors = validateFlowExternal(body as Flow);
+    return reply.send({ ok: errors.length === 0, errors });
+  });
 
   app.get('/:id', async (req, reply) => {
     const params = idParamSchema.safeParse(req.params);
