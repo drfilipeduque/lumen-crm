@@ -9,7 +9,8 @@ export type HistoryFilter =
   | 'OWNER'
   | 'REMINDER'
   | 'FILE'
-  | 'DESCRIPTION';
+  | 'DESCRIPTION'
+  | 'TRANSFER';
 
 export type HistoryEntry = {
   id: string;

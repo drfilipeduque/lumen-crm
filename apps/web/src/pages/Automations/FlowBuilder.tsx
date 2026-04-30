@@ -205,7 +205,7 @@ export function FlowBuilder() {
         </span>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: t.textDim }}>
           Ativo
-          <Switch checked={active} onCheckedChange={handleToggleActive} />
+          <Switch checked={active} onChange={handleToggleActive} />
         </div>
         <button
           type="button"

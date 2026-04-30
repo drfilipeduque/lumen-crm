@@ -254,9 +254,10 @@ export function useSendMessage() {
       const previous = qc.getQueryData<MessagesCache>(queryKey);
       // Páginas vêm com a mais NOVA primeiro; cada página em ordem cronológica asc.
       // A otimista vai no fim de pages[0] (final do feed).
-      if (previous && previous.pages[0]) {
+      const firstPage = previous?.pages[0];
+      if (previous && firstPage) {
         const pages = previous.pages.slice();
-        pages[0] = { ...pages[0], data: [...pages[0].data, optimistic] };
+        pages[0] = { data: [...firstPage.data, optimistic], hasMore: firstPage.hasMore };
         qc.setQueryData<MessagesCache>(queryKey, { ...previous, pages });
       } else {
         qc.setQueryData<MessagesCache>(queryKey, {
