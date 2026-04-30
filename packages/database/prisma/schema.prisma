@@ -121,6 +121,7 @@ enum CadenceExecutionStatus {
   PAUSED
   COMPLETED
   CANCELLED
+  FAILED
 }
 
 enum WebhookType {
@@ -214,6 +215,7 @@ model Contact {
   opportunities Opportunity[]
   conversations Conversation[]
   tags          Tag[]          @relation("ContactTags")
+  cadenceExecutions CadenceExecution[] @relation("ContactCadenceExecutions")
 
   @@index([ownerId])
   @@index([name])
@@ -457,6 +459,7 @@ model WhatsAppConnection {
   conversations Conversation[]
   templates     Template[]
   cadences      Cadence[]
+  cadenceExecutions CadenceExecution[] @relation("CadenceExecutionConnection")
 
   @@index([status])
   @@index([type])
@@ -620,14 +623,26 @@ model Automation {
 model Cadence {
   id           String       @id @default(cuid())
   name         String
+  description  String?
   active       Boolean      @default(true)
-  connectionId String
+  // Conexão pré-escolhida (opcional). Quando ausente, a UI/start define no run.
+  connectionId String?
   scope        CadenceScope
+  // Config dependente do scope:
+  //   PIPELINE   -> { pipelineId }
+  //   STAGE      -> { pipelineId, stageId }
+  //   OPPORTUNITY/CONTACT -> {} (start manual)
+  //   GROUP      -> { tagIds?, ownerId?, priority?, valueMin?, valueMax? }
   scopeConfig  Json
   pauseOnReply Boolean      @default(true)
+  // Janela comercial; Json[] dia da semana (0=Dom). Default: seg-sex 9-18.
+  respectBusinessHours Boolean @default(true)
+  businessHoursStart   String  @default("09:00")
+  businessHoursEnd     String  @default("18:00")
+  businessDays         Int[]   @default([1, 2, 3, 4, 5])
   messages     Json
 
-  connection WhatsAppConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  connection WhatsAppConnection? @relation(fields: [connectionId], references: [id], onDelete: SetNull)
   executions CadenceExecution[]
 
   createdAt DateTime @default(now())
@@ -640,19 +655,31 @@ model Cadence {
 model CadenceExecution {
   id              String                 @id @default(cuid())
   cadenceId       String
-  opportunityId   String
+  // contactId é sempre setado; opportunityId é opcional (escopo CONTACT direto).
+  contactId       String
+  opportunityId   String?
+  // Conexão escolhida no start; pode diferir da default da Cadence.
+  connectionId    String?
   currentStep     Int                    @default(0)
   status          CadenceExecutionStatus @default(ACTIVE)
   nextExecutionAt DateTime?
+  // Histórico de steps já enviados: [{ stepId, sentAt, messageId? }]
+  completedSteps  Json                   @default("[]")
+  // Última razão de pausa (ex: "Lead respondeu", "Fora do horário").
+  pauseReason     String?
 
-  cadence     Cadence     @relation(fields: [cadenceId], references: [id], onDelete: Cascade)
-  opportunity Opportunity @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+  cadence     Cadence      @relation(fields: [cadenceId], references: [id], onDelete: Cascade)
+  contact     Contact      @relation("ContactCadenceExecutions", fields: [contactId], references: [id], onDelete: Cascade)
+  opportunity Opportunity? @relation(fields: [opportunityId], references: [id], onDelete: SetNull)
+  connection  WhatsAppConnection? @relation("CadenceExecutionConnection", fields: [connectionId], references: [id], onDelete: SetNull)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([cadenceId])
+  @@index([contactId])
   @@index([opportunityId])
+  @@index([connectionId])
   @@index([status, nextExecutionAt])
 }
 

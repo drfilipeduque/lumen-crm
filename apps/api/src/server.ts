@@ -20,6 +20,8 @@ import { initRealtime } from './lib/realtime.js';
 import { startReminderWorker } from './workers/reminders.js';
 import { startWhatsAppQualityWorker } from './workers/whatsapp-quality.js';
 import { startAutomationEngine } from './workers/automation.js';
+import { startCadenceWorker } from './workers/cadence.js';
+import { registerCadenceListeners } from './modules/cadences/cadence-listeners.js';
 import {
   whatsappConnectionsRoutes,
   whatsappEntryRulesRoutes,
@@ -97,6 +99,8 @@ try {
   startReminderWorker(app.log);
   startWhatsAppQualityWorker(app.log);
   startAutomationEngine(app.log);
+  startCadenceWorker(app.log);
+  registerCadenceListeners(app.log);
   // Reabre sessões WhatsApp persistidas
   void restoreAllSessions().catch((err) => app.log.error({ err }, 'restoreAllSessions failed'));
 } catch (err) {
