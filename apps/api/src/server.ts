@@ -34,6 +34,7 @@ import { connectionTemplatesRoutes } from './modules/whatsapp/meta/templates.rou
 import { scriptFoldersRoutes, scriptsRoutes } from './modules/scripts/scripts.routes.js';
 import { automationRoutes } from './modules/automation/automation.routes.js';
 import { aiIntegrationRoutes } from './modules/automation/ai-integration.routes.js';
+import { automationLogsRoutes } from './modules/automation/logs.routes.js';
 import {
   cadencesRoutes,
   cadenceExecutionsRoutes,
@@ -100,6 +101,7 @@ await app.register(scriptsRoutes, { prefix: '/scripts' });
 await app.register(scriptFoldersRoutes, { prefix: '/script-folders' });
 await app.register(automationRoutes, { prefix: '/automations' });
 await app.register(aiIntegrationRoutes, { prefix: '/ai-integrations' });
+await app.register(automationLogsRoutes, { prefix: '/automation-logs' });
 await app.register(cadencesRoutes, { prefix: '/cadences' });
 await app.register(cadenceExecutionsRoutes, { prefix: '/cadence-executions' });
 await app.register(webhooksRoutes, { prefix: '/webhooks' });
