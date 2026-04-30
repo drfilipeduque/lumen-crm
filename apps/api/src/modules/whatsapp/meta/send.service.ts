@@ -241,6 +241,8 @@ async function persistOutgoing(conv: Conv, p: PersistInput) {
       messageId: created.id,
       conversationId: conv.id,
       contactId: conv.contact.id,
+      connectionId: conv.connection.id,
+      connectionType: 'OFFICIAL',
       content: p.content ?? '',
       type: p.type,
       fromMe: true,

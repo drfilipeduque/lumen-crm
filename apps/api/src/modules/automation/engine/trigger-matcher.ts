@@ -106,8 +106,21 @@ export function matchesTriggerConfig(
       const matchType = (cfg.matchType as 'any' | 'all' | undefined) ?? 'any';
       const content = ((data.content as string | undefined) ?? '').toLowerCase();
       if (keywords.length === 0) return false;
+      // Filtros opcionais por conexão
+      const cfgConnId = cfg.connectionId as string | undefined;
+      const cfgConnType = cfg.connectionType as 'OFFICIAL' | 'UNOFFICIAL' | undefined;
+      if (cfgConnId && data.connectionId !== cfgConnId) return false;
+      if (cfgConnType && data.connectionType !== cfgConnType) return false;
       const hits = keywords.map((k) => content.includes(k.toLowerCase()));
       return matchType === 'all' ? hits.every(Boolean) : hits.some(Boolean);
+    }
+    case 'message_received':
+    case 'message_sent': {
+      const cfgConnId = cfg.connectionId as string | undefined;
+      const cfgConnType = cfg.connectionType as 'OFFICIAL' | 'UNOFFICIAL' | undefined;
+      if (cfgConnId && data.connectionId !== cfgConnId) return false;
+      if (cfgConnType && data.connectionType !== cfgConnType) return false;
+      return true;
     }
     case 'webhook_received': {
       const webhookId = cfg.webhookId as string | undefined;

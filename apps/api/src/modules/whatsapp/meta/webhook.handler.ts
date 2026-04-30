@@ -210,6 +210,8 @@ async function processIncoming(
       messageId: created.id,
       conversationId: conversation.id,
       contactId: contact.id,
+      connectionId: conn.id,
+      connectionType: 'OFFICIAL',
       content: content ?? '',
       type,
       fromMe: false,
