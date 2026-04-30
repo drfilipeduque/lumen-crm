@@ -8,6 +8,7 @@ import { decryptAccessToken } from './crypto.js';
 import { MetaApiError, sendMedia, sendTemplate, sendText } from './meta.service.js';
 import { calculateStatus } from './window.service.js';
 import { buildSendComponents } from './templates.service.js';
+import { eventBus } from '../../automation/engine/event-bus.js';
 
 export class MetaSendError extends Error {
   status: number;
@@ -229,6 +230,20 @@ async function persistOutgoing(conv: Conv, p: PersistInput) {
       contactId: conv.contact.id,
     });
   }
+
+  eventBus.publish({
+    type: 'message.sent',
+    entityId: conv.id,
+    actorId: 'system',
+    data: {
+      messageId: created.id,
+      conversationId: conv.id,
+      contactId: conv.contact.id,
+      content: p.content ?? '',
+      type: p.type,
+      fromMe: true,
+    },
+  });
 
   return created;
 }

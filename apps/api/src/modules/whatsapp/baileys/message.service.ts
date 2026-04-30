@@ -6,6 +6,7 @@ import {
 import { prisma, type Prisma } from '../../../lib/prisma.js';
 import { emitToUser } from '../../../lib/realtime.js';
 import { formatPhoneBR, normalizePhone, phoneVariants } from '../../../lib/phone.js';
+import { eventBus } from '../../automation/engine/event-bus.js';
 import { getSocket } from './session-manager.js';
 import {
   downloadIncomingMedia,
@@ -191,6 +192,20 @@ async function processOne(connectionId: string, msg: WAMessage) {
       sentAt: msg.messageTimestamp
         ? new Date(Number(msg.messageTimestamp) * 1000)
         : new Date(),
+    },
+  });
+
+  eventBus.publish({
+    type: fromMe ? 'message.sent' : 'message.received',
+    entityId: conversation.id,
+    actorId: fromMe ? 'system' : null,
+    data: {
+      messageId: created.id,
+      conversationId: conversation.id,
+      contactId: contact.id,
+      content: content ?? '',
+      type,
+      fromMe,
     },
   });
 
@@ -486,6 +501,20 @@ export async function sendMessageToConversation(
   await prisma.conversation.update({
     where: { id: conversationId },
     data: { lastMessageAt: created.createdAt },
+  });
+
+  eventBus.publish({
+    type: 'message.sent',
+    entityId: conversationId,
+    actorId: actor.id,
+    data: {
+      messageId: created.id,
+      conversationId,
+      contactId: conv.contact.id,
+      content: input.content ?? '',
+      type: input.type,
+      fromMe: true,
+    },
   });
 
   // Notifica outros users (admins / vinculados) sobre a mensagem enviada

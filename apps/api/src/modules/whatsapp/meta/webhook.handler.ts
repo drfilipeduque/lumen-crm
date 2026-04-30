@@ -9,6 +9,7 @@ import { saveMessageMedia, type SavedMedia } from '../baileys/media.js';
 import { decryptAccessToken } from './crypto.js';
 import { downloadMedia, getMediaInfo, MetaApiError } from './meta.service.js';
 import { refreshWindow } from './window.service.js';
+import { eventBus } from '../../automation/engine/event-bus.js';
 
 // =====================================================================
 // HMAC (x-hub-signature-256)
@@ -200,6 +201,20 @@ async function processIncoming(
 
   // Janela de 24h: cliente respondeu, renova.
   await refreshWindow(conversation.id);
+
+  eventBus.publish({
+    type: 'message.received',
+    entityId: conversation.id,
+    actorId: null,
+    data: {
+      messageId: created.id,
+      conversationId: conversation.id,
+      contactId: contact.id,
+      content: content ?? '',
+      type,
+      fromMe: false,
+    },
+  });
 
   // Aplica regra de entrada (mesma lógica do Baileys).
   await applyEntryRule(conn.id, contact.id, contact.name);

@@ -1,4 +1,5 @@
 import { prisma, Prisma } from '../../lib/prisma.js';
+import { eventBus } from '../automation/engine/event-bus.js';
 
 export class OpportunityError extends Error {
   status: number;
@@ -346,6 +347,19 @@ export async function createOpportunity(actor: Actor, input: CreateInput): Promi
     select: { id: true },
   });
 
+  eventBus.publish({
+    type: 'opportunity.created',
+    entityId: created.id,
+    actorId: actor.id,
+    data: {
+      opportunityId: created.id,
+      contactId: input.contactId,
+      pipelineId: input.pipelineId,
+      stageId: input.stageId,
+      userId: actor.id,
+    },
+  });
+
   return getOpportunity(actor, created.id);
 }
 
@@ -401,6 +415,54 @@ export async function updateOpportunity(
   }
 
   await logOpportunityChange(id, prev, input, actor.id);
+
+  // Eventos de domínio pra automation engine.
+  if (input.stageId && input.stageId !== prev.stageId) {
+    const next = await prisma.stage.findUnique({
+      where: { id: input.stageId },
+      select: { isClosedWon: true, isClosedLost: true },
+    });
+    eventBus.publish({
+      type: 'opportunity.stage_changed',
+      entityId: id,
+      actorId: actor.id,
+      data: { opportunityId: id, fromStageId: prev.stageId, toStageId: input.stageId, contactId: prev.contactId, userId: actor.id },
+    });
+    if (next?.isClosedWon) {
+      eventBus.publish({ type: 'opportunity.won', entityId: id, actorId: actor.id, data: { opportunityId: id, contactId: prev.contactId, userId: actor.id } });
+    }
+    if (next?.isClosedLost) {
+      eventBus.publish({ type: 'opportunity.lost', entityId: id, actorId: actor.id, data: { opportunityId: id, contactId: prev.contactId, userId: actor.id } });
+    }
+  }
+  if (input.priority !== undefined && input.priority !== prev.priority) {
+    eventBus.publish({ type: 'opportunity.priority_changed', entityId: id, actorId: actor.id, data: { opportunityId: id, contactId: prev.contactId, priority: input.priority, userId: actor.id } });
+  }
+  if (input.value !== undefined && Number(prev.value) !== input.value) {
+    eventBus.publish({ type: 'opportunity.value_changed', entityId: id, actorId: actor.id, data: { opportunityId: id, contactId: prev.contactId, value: input.value, userId: actor.id } });
+  }
+  if (input.ownerId !== undefined && prev.ownerId !== input.ownerId) {
+    eventBus.publish({ type: 'opportunity.owner_changed', entityId: id, actorId: actor.id, data: { opportunityId: id, contactId: prev.contactId, fromOwnerId: prev.ownerId, toOwnerId: input.ownerId, userId: actor.id } });
+  }
+  if (input.tagIds !== undefined) {
+    const before = new Set(prev.tags.map((t) => t.id));
+    const after = new Set(input.tagIds);
+    for (const tid of input.tagIds) {
+      if (!before.has(tid)) {
+        eventBus.publish({ type: 'opportunity.tag_added', entityId: id, actorId: actor.id, data: { opportunityId: id, contactId: prev.contactId, tagId: tid, userId: actor.id } });
+      }
+    }
+    for (const tid of before) {
+      if (!after.has(tid)) {
+        eventBus.publish({ type: 'opportunity.tag_removed', entityId: id, actorId: actor.id, data: { opportunityId: id, contactId: prev.contactId, tagId: tid, userId: actor.id } });
+      }
+    }
+  }
+  if (input.customFields) {
+    for (const [customFieldId, value] of Object.entries(input.customFields)) {
+      eventBus.publish({ type: 'opportunity.field_updated', entityId: id, actorId: actor.id, data: { opportunityId: id, contactId: prev.contactId, customFieldId, value, userId: actor.id } });
+    }
+  }
 
   return getOpportunity(actor, id);
 }
@@ -515,7 +577,7 @@ export async function moveOpportunity(
 ): Promise<{ ok: true }> {
   const opp = await prisma.opportunity.findFirst({
     where: { AND: [{ id }, ownerScope(actor)] },
-    select: { id: true, stageId: true, pipelineId: true },
+    select: { id: true, stageId: true, pipelineId: true, contactId: true },
   });
   if (!opp) throw new OpportunityError('NOT_FOUND', 'Oportunidade não encontrada', 404);
   await validateStageBelongsToPipeline(toStageId, opp.pipelineId);
@@ -548,6 +610,25 @@ export async function moveOpportunity(
       });
     }
   });
+
+  if (fromStageId !== toStageId) {
+    eventBus.publish({
+      type: 'opportunity.stage_changed',
+      entityId: id,
+      actorId: actor.id,
+      data: { opportunityId: id, fromStageId, toStageId, contactId: opp.contactId, userId: actor.id },
+    });
+    const next = await prisma.stage.findUnique({
+      where: { id: toStageId },
+      select: { isClosedWon: true, isClosedLost: true },
+    });
+    if (next?.isClosedWon) {
+      eventBus.publish({ type: 'opportunity.won', entityId: id, actorId: actor.id, data: { opportunityId: id, contactId: opp.contactId, userId: actor.id } });
+    }
+    if (next?.isClosedLost) {
+      eventBus.publish({ type: 'opportunity.lost', entityId: id, actorId: actor.id, data: { opportunityId: id, contactId: opp.contactId, userId: actor.id } });
+    }
+  }
 
   return { ok: true };
 }
@@ -754,6 +835,17 @@ export async function setTags(
   }
   if (entries.length > 0) await prisma.opportunityHistory.createMany({ data: entries });
 
+  for (const tid of tagIds) {
+    if (!before.has(tid)) {
+      eventBus.publish({ type: 'opportunity.tag_added', entityId: id, actorId: actor.id, data: { opportunityId: id, contactId: prev.contactId, tagId: tid, userId: actor.id } });
+    }
+  }
+  for (const tid of before) {
+    if (!after.has(tid)) {
+      eventBus.publish({ type: 'opportunity.tag_removed', entityId: id, actorId: actor.id, data: { opportunityId: id, contactId: prev.contactId, tagId: tid, userId: actor.id } });
+    }
+  }
+
   return getOpportunity(actor, id);
 }
 
@@ -790,6 +882,15 @@ export async function setOpportunityCustomFields(
       metadata: { fields: ['customFields'] } as Prisma.InputJsonValue,
     },
   });
+
+  for (const r of rows) {
+    eventBus.publish({
+      type: 'opportunity.field_updated',
+      entityId: id,
+      actorId: actor.id,
+      data: { opportunityId: id, customFieldId: r.customFieldId, value: r.value, userId: actor.id },
+    });
+  }
 
   return getOpportunity(actor, id);
 }
