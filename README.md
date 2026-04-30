@@ -107,6 +107,18 @@ Pronto:
 
 Tokens definidos em `apps/web/src/index.css` e mapeados no `apps/web/tailwind.config.ts`.
 
+## Construtor Simples de Automações
+
+A página `/automations/flows/:id` (FlowBuilder) usa um modelo linear estilo ClickUp em coluna única:
+
+- **QUANDO** — 1 gatilho, dropdown categorizado (Pipeline · WhatsApp · Tempo/Externo) com formulário dinâmico baseado em `GET /automations/catalog`.
+- **E SE** — lista de condições combinadas por um único operador top-level (AND ou OR). Cobre 95% dos casos reais; lógicas aninhadas (`(A AND B) OR C`) ainda exigem JSON raw.
+- **ENTÃO** — sequência numerada de ações com drag-and-drop (`@dnd-kit/sortable`), setas ↑↓, e cards expansíveis. A ação **Enviar WhatsApp** tem um form especializado com seções Conteúdo / Conexão / Fallback e preview do caminho previsto.
+
+O JSON de `Automation.flow` continua o mesmo (1 trigger node, 1 condition wrapper opcional, cadeia linear de actions); o construtor gera as edges automaticamente. Fluxos criados no editor antigo (ReactFlow) com múltiplas branches são preservados em modo legado, com aviso na tela.
+
+Variáveis disponíveis nos textareas (mensagens, prompts, payloads): `{{contact.*}}`, `{{user.*}}`, `{{date.today}}`, `{{time.now}}`, mais `{{opportunity.*}}` ou `{{message.*}}` conforme o trigger, e `{{step.N.output}}` para outputs de actions anteriores.
+
 ## Roteamento Inteligente WhatsApp
 
 As actions de envio de WhatsApp em automações suportam 3 estratégias de seleção de conexão:
@@ -153,3 +165,4 @@ Toggles independentes para `keepTags`, `keepReminders`, `keepFiles`. A movimenta
 - [x] Cadências — Parte 2 (sequências programadas)
 - [x] Construtor visual de Fluxos + Webhooks UI + Logs UI — Parte 3
 - [x] Roteamento Inteligente WhatsApp + Transferência entre Funis
+- [x] Construtor Simples de Automações (substitui ReactFlow)
