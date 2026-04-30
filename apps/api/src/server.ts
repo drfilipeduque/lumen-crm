@@ -38,6 +38,11 @@ import {
   cadencesRoutes,
   cadenceExecutionsRoutes,
 } from './modules/cadences/cadences.routes.js';
+import {
+  webhooksRoutes,
+  webhooksInboundRoutes,
+} from './modules/webhooks/webhooks.routes.js';
+import { registerWebhookDispatcher } from './modules/webhooks/webhooks.dispatcher.js';
 
 const app = Fastify({
   logger: {
@@ -97,6 +102,9 @@ await app.register(automationRoutes, { prefix: '/automations' });
 await app.register(aiIntegrationRoutes, { prefix: '/ai-integrations' });
 await app.register(cadencesRoutes, { prefix: '/cadences' });
 await app.register(cadenceExecutionsRoutes, { prefix: '/cadence-executions' });
+await app.register(webhooksRoutes, { prefix: '/webhooks' });
+// Receiver INBOUND público — rota sem auth global, valida X-Auth-Token no handler.
+await app.register(webhooksInboundRoutes, { prefix: '/webhooks/inbound' });
 
 try {
   await app.listen({ host: env.API_HOST, port: env.API_PORT });
@@ -107,6 +115,7 @@ try {
   startAutomationEngine(app.log);
   startCadenceWorker(app.log);
   registerCadenceListeners(app.log);
+  registerWebhookDispatcher(app.log);
   // Reabre sessões WhatsApp persistidas
   void restoreAllSessions().catch((err) => app.log.error({ err }, 'restoreAllSessions failed'));
 } catch (err) {
