@@ -36,7 +36,23 @@ lumen-crm/
 
 - **Node.js** ≥ 20 (`.nvmrc` aponta para 20)
 - **pnpm** ≥ 10
-- **Docker** + **Docker Compose**
+- **Docker** + **Docker Compose** (ou Postgres/Redis nativos)
+
+### ⚠️ Redis é obrigatório
+
+Os módulos de **Automation Engine** e **Cadências** dependem de BullMQ, que exige Redis. A API tenta se conectar ao Redis no boot — sem ele, os workers entram em loop de `ECONNREFUSED` e nenhuma automação ou cadência dispara.
+
+```bash
+# Caminho recomendado (Docker)
+docker-compose up -d
+
+# Alternativa: instalar nativamente
+sudo apt-get install -y redis-server
+sudo service redis-server start
+redis-cli ping   # → PONG
+```
+
+A URL é configurada via `REDIS_URL` no `.env` (default `redis://localhost:6379`).
 
 ## Setup rápido
 
@@ -93,8 +109,11 @@ Tokens definidos em `apps/web/src/index.css` e mapeados no `apps/web/tailwind.co
 
 ## Próximos passos
 
-- [ ] Aplicar handoff do design system (componentes + 7 telas)
-- [ ] Implementar autenticação (JWT access/refresh)
-- [ ] Modelar entidades do domínio no Prisma (Lead, Pipeline, User, etc.)
-- [ ] Integração WhatsApp + filas BullMQ para automações
-- [ ] Realtime (Socket.io) para o pipeline visual
+- [x] Aplicar handoff do design system (componentes + 7 telas)
+- [x] Implementar autenticação (JWT access/refresh)
+- [x] Modelar entidades do domínio no Prisma
+- [x] Integração WhatsApp (Baileys + Meta Cloud API)
+- [x] Realtime (Socket.io) para pipeline e conversas
+- [x] Automation Engine — Parte 1 (event-driven + IA)
+- [x] Cadências — Parte 2 (sequências programadas)
+- [ ] Construtor visual de Fluxos + Webhooks UI + Logs UI — Parte 3
