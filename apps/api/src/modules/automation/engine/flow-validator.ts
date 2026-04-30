@@ -74,8 +74,18 @@ const triggerConfigSchemas: Record<string, z.ZodTypeAny> = {
       withinHours: z.number().positive(),
     })
     .passthrough(),
-  message_received: z.object({}).passthrough(),
-  message_sent: z.object({}).passthrough(),
+  message_received: z
+    .object({
+      connectionId: z.string().optional(),
+      connectionType: z.enum(['OFFICIAL', 'UNOFFICIAL']).optional(),
+    })
+    .passthrough(),
+  message_sent: z
+    .object({
+      connectionId: z.string().optional(),
+      connectionType: z.enum(['OFFICIAL', 'UNOFFICIAL']).optional(),
+    })
+    .passthrough(),
   keyword_detected: z
     .object({
       keywords: z.array(z.string()).min(1, { message: 'Defina pelo menos 1 palavra-chave' }),
@@ -102,6 +112,23 @@ const triggerConfigSchemas: Record<string, z.ZodTypeAny> = {
     })
     .passthrough(),
   webhook_received: z.object({ webhookId: z.string().optional() }).passthrough(),
+  opportunity_transferred: z
+    .object({
+      fromPipelineId: z.string().optional(),
+      toPipelineId: z.string().optional(),
+      fromStageId: z.string().optional(),
+      toStageId: z.string().optional(),
+    })
+    .passthrough(),
+  message_unanswered: z
+    .object({
+      hours: z.number().positive({ message: 'Horas deve ser positivo' }),
+      direction: z.enum(['CLIENT_WAITING', 'US_WAITING']),
+      connectionId: z.string().optional(),
+      connectionType: z.enum(['OFFICIAL', 'UNOFFICIAL']).optional(),
+    })
+    .passthrough(),
+  conversation_resolved: z.object({}).passthrough(),
 };
 
 const conditionConfigSchemas: Record<string, z.ZodTypeAny> = {
@@ -132,11 +159,55 @@ const actionConfigSchemas: Record<string, z.ZodTypeAny> = {
       conversationId: z.string().optional(),
       text: z.string().optional(),
       scriptId: z.string().optional(),
+      mediaUrl: z.string().optional(),
+      connectionStrategy: z.enum(['DEFAULT', 'SPECIFIC', 'TYPE_PREFERRED']).optional(),
+      connectionId: z.string().optional(),
+      preferredType: z.enum(['OFFICIAL', 'UNOFFICIAL']).optional(),
+      fallback: z
+        .object({
+          enabled: z.boolean().optional(),
+          useTemplate: z.boolean().optional(),
+          templateId: z.string().optional(),
+          templateVariables: z.record(z.string(), z.string()).optional(),
+          fallbackToOtherConnection: z.boolean().optional(),
+        })
+        .passthrough()
+        .optional(),
     })
-    .refine((v) => v.text || v.scriptId, { message: 'Defina o texto ou um script' })
+    .refine((v) => v.text || v.scriptId || v.mediaUrl, {
+      message: 'Defina texto, script ou mídia',
+    })
     .or(z.object({ text: z.string() }).passthrough()),
   send_whatsapp_template: z
-    .object({ templateId: z.string().min(1), conversationId: z.string().optional() })
+    .object({
+      templateId: z.string().min(1),
+      conversationId: z.string().optional(),
+      connectionStrategy: z.enum(['DEFAULT', 'SPECIFIC', 'TYPE_PREFERRED']).optional(),
+      connectionId: z.string().optional(),
+      preferredType: z.enum(['OFFICIAL', 'UNOFFICIAL']).optional(),
+      variables: z.record(z.string(), z.string()).optional(),
+    })
+    .passthrough(),
+  resolve_conversation: z
+    .object({
+      conversationId: z.string().optional(),
+      sendFinalMessage: z.boolean().optional(),
+      finalMessageContent: z.string().optional(),
+    })
+    .passthrough(),
+  transfer_to_pipeline: z
+    .object({
+      targetPipelineId: z.string().min(1, 'Funil destino obrigatório'),
+      targetStageId: z.string().min(1, 'Etapa destino obrigatória'),
+      customFieldStrategy: z.enum(['KEEP_COMPATIBLE', 'DISCARD_ALL', 'MAP']).optional(),
+      fieldMapping: z
+        .array(z.object({ fromCustomFieldId: z.string(), toCustomFieldId: z.string() }))
+        .optional(),
+      keepHistory: z.boolean().optional(),
+      keepTags: z.boolean().optional(),
+      keepReminders: z.boolean().optional(),
+      keepFiles: z.boolean().optional(),
+    })
     .passthrough(),
   move_stage: z.object({ stageId: z.string().min(1) }).passthrough(),
   add_tag: z.object({ tagId: z.string().min(1) }).passthrough(),

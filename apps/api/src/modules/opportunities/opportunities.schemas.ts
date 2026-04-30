@@ -58,6 +58,24 @@ export const reorderSchema = z.object({
   order: z.coerce.number().int().min(0, 'Ordem inválida'),
 });
 
+export const transferSchema = z.object({
+  targetPipelineId: z.string().min(1, 'Funil destino obrigatório'),
+  targetStageId: z.string().min(1, 'Etapa destino obrigatória'),
+  customFieldStrategy: z.enum(['KEEP_COMPATIBLE', 'DISCARD_ALL', 'MAP']).optional(),
+  fieldMapping: z
+    .array(
+      z.object({
+        fromCustomFieldId: z.string().min(1),
+        toCustomFieldId: z.string().min(1),
+      }),
+    )
+    .optional(),
+  keepHistory: z.boolean().optional(),
+  keepTags: z.boolean().optional(),
+  keepReminders: z.boolean().optional(),
+  keepFiles: z.boolean().optional(),
+});
+
 export const idParamSchema = z.object({ id: z.string().min(1) });
 export const pipelineParamSchema = z.object({ pipelineId: z.string().min(1) });
 

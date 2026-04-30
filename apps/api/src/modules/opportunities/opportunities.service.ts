@@ -637,6 +637,226 @@ export async function moveOpportunity(
   return { ok: true };
 }
 
+// ============================================================
+// TRANSFER (cross-pipeline) — usado pela action transfer_to_pipeline
+// e pelo endpoint manual PUT /opportunities/:id/transfer
+// ============================================================
+
+export type TransferStrategy = 'KEEP_COMPATIBLE' | 'DISCARD_ALL' | 'MAP';
+
+export type TransferInput = {
+  targetPipelineId: string;
+  targetStageId: string;
+  customFieldStrategy?: TransferStrategy;
+  fieldMapping?: { fromCustomFieldId: string; toCustomFieldId: string }[];
+  keepHistory?: boolean;
+  keepTags?: boolean;
+  keepReminders?: boolean;
+  keepFiles?: boolean;
+};
+
+export type TransferResult = {
+  opportunityId: string;
+  fromPipelineId: string;
+  fromStageId: string;
+  toPipelineId: string;
+  toStageId: string;
+  removedCustomFields: string[];
+  mappedCustomFields: { from: string; to: string }[];
+  removedTagIds: string[];
+  cancelledReminderIds: string[];
+};
+
+export async function transferOpportunity(
+  actor: Actor,
+  id: string,
+  input: TransferInput,
+): Promise<TransferResult> {
+  const strategy: TransferStrategy = input.customFieldStrategy ?? 'KEEP_COMPATIBLE';
+  const keepTags = input.keepTags ?? true;
+  const keepReminders = input.keepReminders ?? true;
+  // keepHistory e keepFiles existem na config, mas history e files já são preservados
+  // por padrão (são tabelas linkadas à opportunity, não ao pipeline) — não deletamos.
+
+  const opp = await prisma.opportunity.findFirst({
+    where: { AND: [{ id }, ownerScope(actor)] },
+    select: {
+      id: true,
+      pipelineId: true,
+      stageId: true,
+      contactId: true,
+      tags: { select: { id: true } },
+      customFieldValues: { select: { customFieldId: true, value: true } },
+      reminders: { where: { completedAt: null }, select: { id: true } },
+    },
+  });
+  if (!opp) throw new OpportunityError('NOT_FOUND', 'Oportunidade não encontrada', 404);
+
+  await validateStageBelongsToPipeline(input.targetStageId, input.targetPipelineId);
+
+  const fromPipelineId = opp.pipelineId;
+  const fromStageId = opp.stageId;
+
+  if (fromPipelineId === input.targetPipelineId && fromStageId === input.targetStageId) {
+    throw new OpportunityError('SAME_PIPELINE_STAGE', 'Funil e etapa de destino são iguais aos atuais', 400);
+  }
+
+  // Resolve estratégia de campos personalizados.
+  const targetVisible = await prisma.pipelineCustomField.findMany({
+    where: { pipelineId: input.targetPipelineId, visible: true },
+    select: { customFieldId: true },
+  });
+  const targetVisibleSet = new Set(targetVisible.map((p) => p.customFieldId));
+  const currentFieldIds = opp.customFieldValues.map((v) => v.customFieldId);
+
+  const removedCustomFields: string[] = [];
+  const mappedCustomFields: { from: string; to: string }[] = [];
+  const upsertsAfter: { customFieldId: string; value: string }[] = [];
+  const deleteAll = strategy === 'DISCARD_ALL';
+
+  if (strategy === 'KEEP_COMPATIBLE') {
+    for (const fid of currentFieldIds) {
+      if (!targetVisibleSet.has(fid)) removedCustomFields.push(fid);
+    }
+  } else if (strategy === 'MAP') {
+    const map = input.fieldMapping ?? [];
+    for (const fid of currentFieldIds) {
+      const m = map.find((x) => x.fromCustomFieldId === fid);
+      if (m && targetVisibleSet.has(m.toCustomFieldId)) {
+        const v = opp.customFieldValues.find((c) => c.customFieldId === fid);
+        upsertsAfter.push({ customFieldId: m.toCustomFieldId, value: v?.value ?? '' });
+        mappedCustomFields.push({ from: fid, to: m.toCustomFieldId });
+      }
+      // Tudo que não está no mapping (ou cujo destino não é visível) some.
+      removedCustomFields.push(fid);
+    }
+  }
+  // DISCARD_ALL: removedCustomFields = currentFieldIds (preenchido abaixo)
+
+  const cancelledReminderIds = !keepReminders ? opp.reminders.map((r) => r.id) : [];
+  const removedTagIds = !keepTags ? opp.tags.map((t) => t.id) : [];
+
+  await prisma.$transaction(async (tx) => {
+    // Posiciona no fim da coluna destino.
+    const last = await tx.opportunity.aggregate({
+      where: { stageId: input.targetStageId },
+      _max: { order: true },
+    });
+    const newOrder = (last._max.order ?? -1) + 1;
+
+    await tx.opportunity.update({
+      where: { id },
+      data: { pipelineId: input.targetPipelineId, stageId: input.targetStageId, order: newOrder },
+    });
+
+    // Compacta a stage de origem
+    await renumberStage(tx, fromStageId, null, 0);
+
+    // CustomFields conforme estratégia
+    if (deleteAll) {
+      await tx.customFieldValue.deleteMany({ where: { opportunityId: id } });
+    } else if (strategy === 'KEEP_COMPATIBLE') {
+      if (removedCustomFields.length > 0) {
+        await tx.customFieldValue.deleteMany({
+          where: { opportunityId: id, customFieldId: { in: removedCustomFields } },
+        });
+      }
+    } else if (strategy === 'MAP') {
+      // Apaga todos os existentes e recria os mapeados (já incluímos os "from" em removedCustomFields)
+      await tx.customFieldValue.deleteMany({ where: { opportunityId: id } });
+      for (const u of upsertsAfter) {
+        await tx.customFieldValue.create({
+          data: { opportunityId: id, customFieldId: u.customFieldId, value: u.value },
+        });
+      }
+    }
+
+    if (deleteAll) {
+      // Pra DISCARD_ALL: o que removemos é tudo
+      removedCustomFields.push(...currentFieldIds);
+    }
+
+    if (!keepTags && removedTagIds.length > 0) {
+      await tx.opportunity.update({
+        where: { id },
+        data: { tags: { set: [] } },
+      });
+    }
+
+    if (!keepReminders && cancelledReminderIds.length > 0) {
+      await tx.reminder.deleteMany({ where: { id: { in: cancelledReminderIds } } });
+    }
+
+    await tx.opportunityHistory.create({
+      data: {
+        opportunityId: id,
+        action: 'TRANSFERRED',
+        fromStageId,
+        toStageId: input.targetStageId,
+        userId: actor.id,
+        metadata: {
+          fromPipelineId,
+          fromStageId,
+          toPipelineId: input.targetPipelineId,
+          toStageId: input.targetStageId,
+          strategy,
+          removedCustomFields,
+          mappedCustomFields,
+          removedTagIds,
+          cancelledReminderIds,
+          keepFiles: input.keepFiles ?? true,
+          keepHistory: input.keepHistory ?? true,
+        },
+      },
+    });
+  });
+
+  // Eventos pro motor de automation: o "transferred" é o canônico,
+  // e o "stage_changed" também é emitido pra compatibilidade com fluxos
+  // que reagem a mudança de etapa (independente do funil).
+  eventBus.publish({
+    type: 'opportunity.transferred',
+    entityId: id,
+    actorId: actor.id,
+    data: {
+      opportunityId: id,
+      contactId: opp.contactId,
+      fromPipelineId,
+      fromStageId,
+      toPipelineId: input.targetPipelineId,
+      toStageId: input.targetStageId,
+      strategy,
+      userId: actor.id,
+    },
+  });
+  eventBus.publish({
+    type: 'opportunity.stage_changed',
+    entityId: id,
+    actorId: actor.id,
+    data: {
+      opportunityId: id,
+      pipelineId: input.targetPipelineId,
+      fromStageId,
+      toStageId: input.targetStageId,
+      stageId: input.targetStageId,
+      contactId: opp.contactId,
+      userId: actor.id,
+    },
+  });
+
+  return {
+    opportunityId: id,
+    fromPipelineId,
+    fromStageId,
+    toPipelineId: input.targetPipelineId,
+    toStageId: input.targetStageId,
+    removedCustomFields,
+    mappedCustomFields,
+    removedTagIds,
+    cancelledReminderIds,
+  };
+}
+
 export async function reorderOpportunity(
   actor: Actor,
   id: string,
@@ -710,7 +930,8 @@ export type HistoryFilter =
   | 'OWNER'
   | 'REMINDER'
   | 'FILE'
-  | 'DESCRIPTION';
+  | 'DESCRIPTION'
+  | 'TRANSFER';
 
 const HISTORY_GROUPS: Record<HistoryFilter, string[] | null> = {
   ALL: null,
@@ -721,6 +942,7 @@ const HISTORY_GROUPS: Record<HistoryFilter, string[] | null> = {
   REMINDER: ['REMINDER_CREATED', 'REMINDER_COMPLETED'],
   FILE: ['FILE_UPLOADED', 'FILE_DELETED'],
   DESCRIPTION: ['DESCRIPTION_UPDATED'],
+  TRANSFER: ['TRANSFERRED'],
 };
 
 export type HistoryEntry = {

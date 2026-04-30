@@ -7,6 +7,7 @@ import {
   moveSchema,
   pipelineParamSchema,
   reorderSchema,
+  transferSchema,
   updateOpportunitySchema,
 } from './opportunities.schemas.js';
 import { z } from 'zod';
@@ -23,6 +24,7 @@ import {
   setDescription,
   setOpportunityCustomFields,
   setTags,
+  transferOpportunity,
   updateOpportunity,
   type HistoryFilter,
 } from './opportunities.service.js';
@@ -86,6 +88,18 @@ export const opportunitiesRoutes: FastifyPluginAsync = async (app) => {
     }
   });
 
+  app.put('/:id/transfer', async (req, reply) => {
+    const params = idParamSchema.safeParse(req.params);
+    if (!params.success) return reply.code(400).send({ error: 'VALIDATION', issues: params.error.flatten() });
+    const body = transferSchema.safeParse(req.body);
+    if (!body.success) return reply.code(400).send({ error: 'VALIDATION', issues: body.error.flatten() });
+    try {
+      return reply.send(await transferOpportunity(req.user!, params.data.id, body.data));
+    } catch (e) {
+      return send(reply, e);
+    }
+  });
+
   app.put('/:id/reorder', async (req, reply) => {
     const params = idParamSchema.safeParse(req.params);
     if (!params.success) return reply.code(400).send({ error: 'VALIDATION', issues: params.error.flatten() });
@@ -114,7 +128,7 @@ export const opportunitiesRoutes: FastifyPluginAsync = async (app) => {
     const query = z
       .object({
         type: z
-          .enum(['ALL', 'STAGE_CHANGED', 'FIELD_UPDATED', 'TAG', 'OWNER', 'REMINDER', 'FILE', 'DESCRIPTION'])
+          .enum(['ALL', 'STAGE_CHANGED', 'FIELD_UPDATED', 'TAG', 'OWNER', 'REMINDER', 'FILE', 'DESCRIPTION', 'TRANSFER'])
           .default('ALL'),
       })
       .safeParse(req.query);

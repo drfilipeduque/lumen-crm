@@ -27,8 +27,11 @@ export const TRIGGER_TO_EVENT: Record<string, AutomationEventType | null> = {
   keyword_detected: 'message.received', // filtra por keyword no config
   opportunity_won: 'opportunity.won',
   opportunity_lost: 'opportunity.lost',
+  opportunity_transferred: 'opportunity.transferred',
   scheduled: null, // cron
   webhook_received: 'webhook.received',
+  message_unanswered: null, // cron (Parte 5)
+  conversation_resolved: 'conversation.resolved',
 };
 
 // Lista de triggers válidos (usado em validação Zod nas rotas).
@@ -56,16 +59,30 @@ export function matchesTriggerConfig(
   // Filtro genérico por funil/etapa pros triggers do domínio Oportunidade.
   // Se a config tem pipelineId/stageId mas o payload não traz (eventos antigos
   // ou de domínio diferente), o filtro é ignorado (não bloqueia).
-  const cfgPipelineId = cfg.pipelineId as string | undefined;
-  const cfgStageId = cfg.stageId as string | undefined;
-  if (cfgPipelineId && typeof data.pipelineId === 'string' && data.pipelineId !== cfgPipelineId) {
-    return false;
-  }
-  if (cfgStageId && typeof data.stageId === 'string' && data.stageId !== cfgStageId) {
-    return false;
+  // opportunity_transferred usa filtros próprios (from/to) — pula o genérico.
+  if (triggerType !== 'opportunity_transferred') {
+    const cfgPipelineId = cfg.pipelineId as string | undefined;
+    const cfgStageId = cfg.stageId as string | undefined;
+    if (cfgPipelineId && typeof data.pipelineId === 'string' && data.pipelineId !== cfgPipelineId) {
+      return false;
+    }
+    if (cfgStageId && typeof data.stageId === 'string' && data.stageId !== cfgStageId) {
+      return false;
+    }
   }
 
   switch (triggerType) {
+    case 'opportunity_transferred': {
+      const fromPipe = cfg.fromPipelineId as string | undefined;
+      const toPipe = cfg.toPipelineId as string | undefined;
+      const fromStage = cfg.fromStageId as string | undefined;
+      const toStage = cfg.toStageId as string | undefined;
+      if (fromPipe && data.fromPipelineId !== fromPipe) return false;
+      if (toPipe && data.toPipelineId !== toPipe) return false;
+      if (fromStage && data.fromStageId !== fromStage) return false;
+      if (toStage && data.toStageId !== toStage) return false;
+      return true;
+    }
     case 'opportunity_stage_changed': {
       const from = cfg.fromStageId as string | undefined;
       const to = cfg.toStageId as string | undefined;

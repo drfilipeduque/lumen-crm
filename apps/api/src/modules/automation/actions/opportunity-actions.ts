@@ -75,4 +75,22 @@ export const opportunityActions: ActionDefinition[] = [
       { name: 'days', type: 'number', required: false, label: 'Dias' },
     ],
   },
+  {
+    subtype: 'transfer_to_pipeline',
+    label: 'Transferir para outro funil',
+    domain: 'opportunity',
+    configFields: [
+      { name: 'targetPipelineId', type: 'pipeline', required: true, label: 'Funil destino' },
+      { name: 'targetStageId', type: 'stage', required: true, label: 'Etapa destino' },
+      {
+        name: 'customFieldStrategy',
+        type: 'string',
+        required: false,
+        label: 'Campos personalizados (KEEP_COMPATIBLE | DISCARD_ALL | MAP)',
+      },
+      { name: 'keepTags', type: 'boolean', required: false, label: 'Manter tags' },
+      { name: 'keepReminders', type: 'boolean', required: false, label: 'Manter lembretes' },
+      { name: 'keepFiles', type: 'boolean', required: false, label: 'Manter arquivos' },
+    ],
+  },
 ];

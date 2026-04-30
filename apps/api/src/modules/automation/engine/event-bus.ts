@@ -21,9 +21,12 @@ export type AutomationEventType =
   | 'opportunity.won'
   | 'opportunity.lost'
   | 'opportunity.deleted'
+  | 'opportunity.transferred'
   | 'message.received'
   | 'message.sent'
+  | 'message.unanswered'
   | 'conversation.created'
+  | 'conversation.resolved'
   | 'webhook.received';
 
 export type EventPayload = {

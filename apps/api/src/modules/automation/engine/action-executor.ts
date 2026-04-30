@@ -253,6 +253,62 @@ export async function executeAction(
       return { kind: 'ok', output: { note: text } };
     }
 
+    case 'transfer_to_pipeline': {
+      const op = ctx.opportunity;
+      if (!op) throw new ActionExecutionError('transfer_to_pipeline: opportunity ausente', false);
+      const targetPipelineId = cfg.targetPipelineId as string | undefined;
+      const targetStageId = cfg.targetStageId as string | undefined;
+      if (!targetPipelineId || !targetStageId) {
+        throw new ActionExecutionError('transfer_to_pipeline: targetPipelineId/targetStageId ausente', false);
+      }
+      const { transferOpportunity } = await import('../../opportunities/opportunities.service.js');
+      const r = await transferOpportunity(SYSTEM_ACTOR, op.id, {
+        targetPipelineId,
+        targetStageId,
+        customFieldStrategy: cfg.customFieldStrategy as 'KEEP_COMPATIBLE' | 'DISCARD_ALL' | 'MAP' | undefined,
+        fieldMapping: cfg.fieldMapping as { fromCustomFieldId: string; toCustomFieldId: string }[] | undefined,
+        keepHistory: cfg.keepHistory as boolean | undefined,
+        keepTags: cfg.keepTags as boolean | undefined,
+        keepReminders: cfg.keepReminders as boolean | undefined,
+        keepFiles: cfg.keepFiles as boolean | undefined,
+      });
+      return { kind: 'ok', output: { ...r } };
+    }
+
+    case 'resolve_conversation': {
+      const cfgConvId = cfg.conversationId as string | undefined;
+      const convId = cfgConvId ?? (ctx.message?.conversationId as string | undefined);
+      if (!convId) throw new ActionExecutionError('resolve_conversation: conversationId ausente', false);
+      const sendFinal = Boolean(cfg.sendFinalMessage);
+      const finalText = (cfg.finalMessageContent as string | undefined) ?? '';
+      let finalMessageId: string | null = null;
+      if (sendFinal && finalText.trim()) {
+        const { sendMessageToConversation } = await import('../../whatsapp/baileys/message.service.js');
+        try {
+          const sent = await sendMessageToConversation(SYSTEM_ACTOR, convId, {
+            type: 'TEXT',
+            content: finalText,
+          });
+          finalMessageId = (sent as { id?: string })?.id ?? null;
+        } catch (e) {
+          // Não bloqueia a resolução por falha no envio — registra no output.
+          finalMessageId = null;
+          console.warn('[automation] resolve_conversation: envio final falhou', (e as Error)?.message);
+        }
+      }
+      await prisma.conversation.update({
+        where: { id: convId },
+        data: { status: 'RESOLVED', unreadCount: 0 },
+      });
+      eventBus.publish({
+        type: 'conversation.resolved',
+        entityId: convId,
+        actorId: 'automation',
+        data: { conversationId: convId, finalMessageId },
+      });
+      return { kind: 'ok', output: { conversationId: convId, finalMessageId } };
+    }
+
     case 'send_webhook': {
       const url = cfg.url as string | undefined;
       if (!url) throw new ActionExecutionError('send_webhook: url ausente', false);

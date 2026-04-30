@@ -102,4 +102,15 @@ export const opportunityTriggers: TriggerDefinition[] = [
       { name: 'stageId', type: 'stage', required: false, label: 'Etapa (opcional)' },
     ],
   },
+  {
+    subtype: 'opportunity_transferred',
+    label: 'Oportunidade transferida (entre funis)',
+    kind: 'event',
+    configFields: [
+      { name: 'fromPipelineId', type: 'pipeline', required: false, label: 'Funil origem (opcional)' },
+      { name: 'fromStageId', type: 'stage', required: false, label: 'Etapa origem (opcional)' },
+      { name: 'toPipelineId', type: 'pipeline', required: false, label: 'Funil destino (opcional)' },
+      { name: 'toStageId', type: 'stage', required: false, label: 'Etapa destino (opcional)' },
+    ],
+  },
 ];
