@@ -107,6 +107,41 @@ Pronto:
 
 Tokens definidos em `apps/web/src/index.css` e mapeados no `apps/web/tailwind.config.ts`.
 
+## Roteamento Inteligente WhatsApp
+
+As actions de envio de WhatsApp em automações suportam 3 estratégias de seleção de conexão:
+
+- **DEFAULT** — usa a conversa do trigger ou a primeira ativa do contato (com defaults globais aplicados)
+- **SPECIFIC** — usa uma conexão específica (precisa ter conversation prévia com o contato)
+- **TYPE_PREFERRED** — prioriza o tipo (Oficial / Não oficial), com fallback automático para o outro
+
+Cada envio pode ter **fallback** configurado:
+
+- **Template em janela fechada** — quando a Meta retorna `WINDOW_CLOSED`, dispara um template aprovado configurado
+- **Outra conexão** — se a primeira tentativa falhar, itera para a próxima conexão ativa do contato
+
+Os defaults globais ficam em `/whatsapp` aba **Roteamento** (singleton `WhatsAppRoutingConfig`): conexão padrão, estratégia (`OFFICIAL_FIRST` / `UNOFFICIAL_FIRST` / `OFFICIAL_ONLY` / `UNOFFICIAL_ONLY`), template de fallback, marcar como lida automaticamente e horário comercial only.
+
+Os gatilhos `message_received`, `message_sent` e `keyword_detected` aceitam filtros opcionais por `connectionId` ou `connectionType`, permitindo fluxos diferentes por conexão (ex.: "atribuir Ana se chegou na conexão Recepção").
+
+O caminho de decisão (sequência de tentativas + razão de cada falha) é registrado no AutomationLog em `output.path`.
+
+## Transferência entre Funis
+
+Oportunidades podem se mover entre funis preservando histórico:
+
+- Action `transfer_to_pipeline` no construtor de fluxos
+- Endpoint manual `PUT /opportunities/:id/transfer` (consumido pelo modal "Transferir" no popup de oportunidade)
+- Trigger `opportunity_transferred` (com filtros opcionais by from/to pipeline e etapa) pra encadear automações no funil destino (ex.: cadência de boas-vindas no Pós-Venda quando ganho no Comercial)
+
+3 estratégias para campos personalizados:
+
+- **KEEP_COMPATIBLE** — preserva apenas valores cujo CustomField está visível no funil destino (recomendado)
+- **DISCARD_ALL** — remove todos os valores
+- **MAP** — aplica mapeamento manual `from → to`
+
+Toggles independentes para `keepTags`, `keepReminders`, `keepFiles`. A movimentação é registrada com `HistoryAction.TRANSFERRED` e renderizada no histórico como _"Filipe transferiu de Comercial (Fechado) para Pós-Venda (Onboarding)"_.
+
 ## Próximos passos
 
 - [x] Aplicar handoff do design system (componentes + 7 telas)
@@ -116,4 +151,5 @@ Tokens definidos em `apps/web/src/index.css` e mapeados no `apps/web/tailwind.co
 - [x] Realtime (Socket.io) para pipeline e conversas
 - [x] Automation Engine — Parte 1 (event-driven + IA)
 - [x] Cadências — Parte 2 (sequências programadas)
-- [ ] Construtor visual de Fluxos + Webhooks UI + Logs UI — Parte 3
+- [x] Construtor visual de Fluxos + Webhooks UI + Logs UI — Parte 3
+- [x] Roteamento Inteligente WhatsApp + Transferência entre Funis
