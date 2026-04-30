@@ -10,6 +10,7 @@ import { RemindersPage } from './pages/Reminders';
 import { WhatsAppPage } from './pages/WhatsApp';
 import { ConversationsPage } from './pages/Conversations';
 import { PagePlaceholder } from './pages/PagePlaceholder';
+import { AutomationsPage } from './pages/Automations';
 import { SettingsLayout } from './pages/settings/SettingsLayout';
 import { SettingsSection } from './pages/settings/SettingsSection';
 import { SettingsAccount } from './pages/settings/SettingsAccount';
@@ -48,7 +49,7 @@ export function App() {
               <Route path="/conversations" element={<ConversationsPage />} />
               <Route path="/leads" element={<LeadsPage />} />
               <Route path="/reminders" element={<RemindersPage />} />
-              <Route path="/automations" element={<PagePlaceholder title="Automações" icon="Bolt" />} />
+              <Route path="/automations" element={<AutomationsPage />} />
               <Route path="/whatsapp" element={<WhatsAppPage />} />
 
               <Route path="/settings" element={<SettingsLayout />}>
