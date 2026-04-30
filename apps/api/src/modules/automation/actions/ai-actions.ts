@@ -5,6 +5,7 @@ import { messageActions } from './message-actions.js';
 import { opportunityActions } from './opportunity-actions.js';
 import { notificationActions } from './notification-actions.js';
 import { webhookActions } from './webhook-actions.js';
+import { cadenceActions } from './cadence-actions.js';
 
 export const aiActions: ActionDefinition[] = [
   {
@@ -61,4 +62,5 @@ export const allActionDefinitions: ActionDefinition[] = [
   ...notificationActions,
   ...webhookActions,
   ...aiActions,
+  ...cadenceActions,
 ];

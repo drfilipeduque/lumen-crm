@@ -209,6 +209,23 @@ const actionConfigSchemas: Record<string, z.ZodTypeAny> = {
       keepFiles: z.boolean().optional(),
     })
     .passthrough(),
+  start_cadence: z
+    .object({
+      cadenceId: z.string().min(1, 'Cadência obrigatória'),
+      target: z.enum(['opportunity', 'contact']).optional(),
+    })
+    .passthrough(),
+  pause_cadence: z
+    .object({
+      cadenceId: z.string().optional(),
+      reason: z.string().optional(),
+    })
+    .passthrough(),
+  cancel_cadence: z
+    .object({
+      cadenceId: z.string().optional(),
+    })
+    .passthrough(),
   move_stage: z.object({ stageId: z.string().min(1) }).passthrough(),
   add_tag: z.object({ tagId: z.string().min(1) }).passthrough(),
   remove_tag: z.object({ tagId: z.string().min(1) }).passthrough(),

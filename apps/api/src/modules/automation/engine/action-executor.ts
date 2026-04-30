@@ -425,6 +425,45 @@ export async function executeAction(
       return { kind: 'wait', delayMs };
     }
 
+    case 'start_cadence': {
+      const cadenceId = cfg.cadenceId as string | undefined;
+      if (!cadenceId) throw new ActionExecutionError('start_cadence: cadenceId ausente', false);
+      const target = (cfg.target as 'opportunity' | 'contact' | undefined) ?? 'opportunity';
+      const { startForOpportunity, startForContact } = await import('../../cadences/cadences.service.js');
+      if (target === 'opportunity') {
+        const opId = ctx.opportunity?.id;
+        if (!opId) throw new ActionExecutionError('start_cadence: oportunidade ausente no contexto', false);
+        const exec = await startForOpportunity(cadenceId, opId);
+        return { kind: 'ok', output: { executionId: (exec as { id?: string })?.id } };
+      }
+      const ctcId = ctx.contact?.id;
+      if (!ctcId) throw new ActionExecutionError('start_cadence: contato ausente no contexto', false);
+      const exec = await startForContact(cadenceId, ctcId);
+      return { kind: 'ok', output: { executionId: (exec as { id?: string })?.id } };
+    }
+
+    case 'pause_cadence':
+    case 'cancel_cadence': {
+      const cadenceId = cfg.cadenceId as string | undefined;
+      const reason = (cfg.reason as string | undefined) ?? 'Pausada via automação';
+      const opId = ctx.opportunity?.id;
+      const ctcId = ctx.contact?.id;
+      const where = {
+        status: 'ACTIVE' as const,
+        ...(cadenceId ? { cadenceId } : {}),
+        ...(opId ? { opportunityId: opId } : ctcId ? { contactId: ctcId } : {}),
+      };
+      const execs = await prisma.cadenceExecution.findMany({ where, select: { id: true } });
+      const { pauseExecution, cancelExecution } = await import('../../cadences/cadences.service.js');
+      const ids: string[] = [];
+      for (const e of execs) {
+        if (subtype === 'pause_cadence') await pauseExecution(e.id, reason);
+        else await cancelExecution(e.id);
+        ids.push(e.id);
+      }
+      return { kind: 'ok', output: { affectedExecutions: ids } };
+    }
+
     case 'notify_user': {
       // Delivery interna via socket.io (best-effort). Persistência fica pra um
       // futuro Notification model se necessário.
