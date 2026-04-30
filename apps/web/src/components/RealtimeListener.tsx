@@ -6,7 +6,7 @@ import { toast } from './ui/Toast';
 
 type ReminderDuePayload = { id: string; title: string; opportunityId: string };
 type WAConnectionUpdate = { connectionId: string; status: string; qr?: string; phone?: string | null };
-type MessageNew = { conversationId: string; messageId: string; contactId: string };
+type MessageNew = { conversationId: string; messageId: string; contactId: string; fromMe?: boolean };
 type MessageStatus = {
   conversationId: string;
   messageId: string;
@@ -72,7 +72,9 @@ export function RealtimeListener() {
     qc.invalidateQueries({ queryKey: ['conversation-messages', payload.conversationId] });
     qc.invalidateQueries({ queryKey: ['board'] });
 
-    // Som apenas se a tab não está focada na conversa em questão
+    // Som apenas para mensagens RECEBIDAS (nunca para enviadas pelo próprio usuário)
+    // e quando a tab não está focada na conversa em questão.
+    if (payload.fromMe) return;
     const onConversationsPage = window.location.pathname === '/conversations';
     const params = new URLSearchParams(window.location.search);
     const focusedId = params.get('id');

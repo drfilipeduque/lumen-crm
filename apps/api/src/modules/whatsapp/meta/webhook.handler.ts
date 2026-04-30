@@ -220,7 +220,7 @@ async function processIncoming(
   await applyEntryRule(conn.id, contact.id, contact.name);
 
   // Broadcast
-  await broadcastNewMessage(conn.id, conversation.id, created.id, contact.id);
+  await broadcastNewMessage(conn.id, conversation.id, created.id, contact.id, false);
 
   // Mídia em background
   if (mediaId && conn.accessToken) {
@@ -238,7 +238,7 @@ async function processIncoming(
           where: { id: created.id },
           data: { mediaUrl: saved.url, mediaName: saved.name, mediaSize: saved.size },
         });
-        await broadcastNewMessage(conn.id, conversation.id, created.id, contact.id);
+        await broadcastNewMessage(conn.id, conversation.id, created.id, contact.id, false);
       } catch (e) {
         console.error('[meta/webhook] media download failed', e);
       }
@@ -406,20 +406,21 @@ async function broadcastNewMessage(
   conversationId: string,
   messageId: string,
   contactId: string,
+  fromMe: boolean,
 ) {
   const links = await prisma.userWhatsAppConnection.findMany({
     where: { connectionId },
     select: { userId: true },
   });
   for (const l of links) {
-    emitToUser(l.userId, 'message:new', { conversationId, messageId, contactId });
+    emitToUser(l.userId, 'message:new', { conversationId, messageId, contactId, fromMe });
   }
   const admins = await prisma.user.findMany({
     where: { role: 'ADMIN', active: true },
     select: { id: true },
   });
   for (const a of admins) {
-    emitToUser(a.id, 'message:new', { conversationId, messageId, contactId });
+    emitToUser(a.id, 'message:new', { conversationId, messageId, contactId, fromMe });
   }
 }
 

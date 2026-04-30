@@ -226,7 +226,7 @@ async function processOne(connectionId: string, msg: WAMessage) {
   await applyEntryRule(connectionId, contact.id, contact.name);
 
   // Notifica via socket os users autorizados (e admins)
-  await broadcastNewMessage(connectionId, conversation.id, created.id, contact.id);
+  await broadcastNewMessage(connectionId, conversation.id, created.id, contact.id, fromMe);
 
   // Avatar do contato — busca em background quando ainda não temos.
   // profilePictureUrl pode demorar/falhar (CDN expira ou usuário com
@@ -238,7 +238,7 @@ async function processOne(connectionId: string, msg: WAMessage) {
         const url = (await sock?.profilePictureUrl?.(jid, 'image')) ?? null;
         if (url) {
           await prisma.contact.update({ where: { id: contactId }, data: { avatar: url } });
-          await broadcastNewMessage(connectionId, conversation.id, created.id, contactId);
+          await broadcastNewMessage(connectionId, conversation.id, created.id, contactId, fromMe);
         }
       } catch {
         /* sem foto / privacidade — segue sem avatar */
@@ -261,7 +261,7 @@ async function processOne(connectionId: string, msg: WAMessage) {
           where: { id: created.id },
           data: { mediaUrl: saved.url, mediaName: saved.name, mediaSize: saved.size },
         });
-        await broadcastNewMessage(connectionId, conversation.id, created.id, contact.id);
+        await broadcastNewMessage(connectionId, conversation.id, created.id, contact.id, fromMe);
       } catch (e) {
         console.error('[whatsapp/incoming] media download failed', e);
       }
@@ -337,20 +337,21 @@ async function broadcastNewMessage(
   conversationId: string,
   messageId: string,
   contactId: string,
+  fromMe: boolean,
 ) {
   const links = await prisma.userWhatsAppConnection.findMany({
     where: { connectionId },
     select: { userId: true },
   });
   for (const l of links) {
-    emitToUser(l.userId, 'message:new', { conversationId, messageId, contactId });
+    emitToUser(l.userId, 'message:new', { conversationId, messageId, contactId, fromMe });
   }
   const admins = await prisma.user.findMany({
     where: { role: 'ADMIN', active: true },
     select: { id: true },
   });
   for (const a of admins) {
-    emitToUser(a.id, 'message:new', { conversationId, messageId, contactId });
+    emitToUser(a.id, 'message:new', { conversationId, messageId, contactId, fromMe });
   }
 }
 
@@ -518,7 +519,7 @@ export async function sendMessageToConversation(
   });
 
   // Notifica outros users (admins / vinculados) sobre a mensagem enviada
-  await broadcastNewMessage(conv.connectionId, conversationId, created.id, conv.contact.id);
+  await broadcastNewMessage(conv.connectionId, conversationId, created.id, conv.contact.id, true);
 
   return created;
 }

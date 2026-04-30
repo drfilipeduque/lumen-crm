@@ -217,6 +217,7 @@ async function persistOutgoing(conv: Conv, p: PersistInput) {
       conversationId: conv.id,
       messageId: created.id,
       contactId: conv.contact.id,
+      fromMe: true,
     });
   }
   const admins = await prisma.user.findMany({
@@ -228,6 +229,7 @@ async function persistOutgoing(conv: Conv, p: PersistInput) {
       conversationId: conv.id,
       messageId: created.id,
       contactId: conv.contact.id,
+      fromMe: true,
     });
   }
 
