@@ -137,6 +137,12 @@ enum AutomationLogType {
 enum AutomationLogStatus {
   SUCCESS
   FAILED
+  RUNNING
+}
+
+enum AIProvider {
+  CLAUDE
+  OPENAI
 }
 
 // ============================================================
@@ -596,6 +602,8 @@ model Automation {
   id              String    @id @default(cuid())
   name            String
   active          Boolean   @default(true)
+  // triggerType/triggerConfig são denormalizados a partir do nó de trigger do flow,
+  // mantidos pra indexação rápida em trigger-matcher (evita parse do JSON).
   triggerType     String
   triggerConfig   Json
   flow            Json
@@ -603,6 +611,8 @@ model Automation {
   lastExecutedAt  DateTime?
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
+
+  logs AutomationLog[]
 
   @@index([active, triggerType])
 }
@@ -675,15 +685,42 @@ model AutomationLog {
   id            String              @id @default(cuid())
   type          AutomationLogType
   entityId      String
+  // Link forte pra Automation quando type=AUTOMATION (denormalizado pra facilitar joins)
+  automationId  String?
   status        AutomationLogStatus
   trigger       String
+  // De onde veio: "event:opportunity.created", "manual", "test", "cron"
+  triggeredBy   String?
   input         Json?
   output        Json?
   error         String?
   executionTime Int?
+  // Cada passo do fluxo: { nodeId, type, status, durationMs, output?, error? }
+  steps         Json?
+  startedAt     DateTime            @default(now())
+  completedAt   DateTime?
   createdAt     DateTime            @default(now())
+
+  automation Automation? @relation(fields: [automationId], references: [id], onDelete: Cascade)
 
   @@index([type, entityId])
   @@index([createdAt])
   @@index([status])
+  @@index([automationId, startedAt])
+}
+
+model AIIntegration {
+  id            String     @id @default(cuid())
+  name          String
+  provider      AIProvider
+  // API key cifrada (AES-256-GCM, base64). Nunca retornar em rotas.
+  apiKey        String
+  defaultModel  String
+  active        Boolean    @default(true)
+  usageCount    Int        @default(0)
+  lastUsedAt    DateTime?
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+
+  @@index([active, provider])
 }
