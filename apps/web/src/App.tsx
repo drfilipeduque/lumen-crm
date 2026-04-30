@@ -11,6 +11,7 @@ import { WhatsAppPage } from './pages/WhatsApp';
 import { ConversationsPage } from './pages/Conversations';
 import { PagePlaceholder } from './pages/PagePlaceholder';
 import { AutomationsPage } from './pages/Automations';
+import { FlowEditor } from './pages/Automations/FlowEditor';
 import { SettingsLayout } from './pages/settings/SettingsLayout';
 import { SettingsSection } from './pages/settings/SettingsSection';
 import { SettingsAccount } from './pages/settings/SettingsAccount';
@@ -50,6 +51,14 @@ export function App() {
               <Route path="/leads" element={<LeadsPage />} />
               <Route path="/reminders" element={<RemindersPage />} />
               <Route path="/automations" element={<AutomationsPage />} />
+              <Route
+                path="/automations/flows/:id"
+                element={
+                  <ProtectedRoute roles={['ADMIN']}>
+                    <FlowEditor />
+                  </ProtectedRoute>
+                }
+              />
               <Route path="/whatsapp" element={<WhatsAppPage />} />
 
               <Route path="/settings" element={<SettingsLayout />}>

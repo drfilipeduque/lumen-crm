@@ -5,6 +5,9 @@
 import { useState } from 'react';
 import { useTheme } from '../../lib/ThemeContext';
 import { CadencesTab } from './CadencesTab';
+import { FlowsTab } from './FlowsTab';
+import { WebhooksTab } from './WebhooksTab';
+import { LogsTab } from './LogsTab';
 
 type TabKey = 'cadences' | 'flows' | 'webhooks' | 'logs';
 
@@ -55,19 +58,10 @@ export function AutomationsPage() {
 
       <div style={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
         {tab === 'cadences' && <CadencesTab />}
-        {tab === 'flows' && <Soon t={t} title="Construtor visual de Fluxos" hint="Vai chegar na Parte 3 das Automações." />}
-        {tab === 'webhooks' && <Soon t={t} title="Webhooks" hint="Inbound e outbound — Parte 3." />}
-        {tab === 'logs' && <Soon t={t} title="Logs" hint="Histórico de execuções — Parte 3." />}
+        {tab === 'flows' && <FlowsTab />}
+        {tab === 'webhooks' && <WebhooksTab />}
+        {tab === 'logs' && <LogsTab />}
       </div>
-    </div>
-  );
-}
-
-function Soon({ t, title, hint }: { t: ReturnType<typeof useTheme>['tokens']; title: string; hint: string }) {
-  return (
-    <div style={{ padding: 80, textAlign: 'center', color: t.textDim }}>
-      <div style={{ fontSize: 16, color: t.text, marginBottom: 4 }}>{title}</div>
-      <div style={{ fontSize: 13 }}>{hint}</div>
     </div>
   );
 }
