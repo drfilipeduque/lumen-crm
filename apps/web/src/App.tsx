@@ -17,6 +17,8 @@ import { SettingsAppearance } from './pages/settings/SettingsAppearance';
 import { SettingsTags } from './pages/settings/SettingsTags';
 import { SettingsCustomFields } from './pages/settings/SettingsCustomFields';
 import { SettingsPipelines } from './pages/settings/SettingsPipelines';
+import { SettingsIntegrations } from './pages/settings/SettingsIntegrations';
+import { ApiTestPage } from './pages/ApiTest';
 import { ProtectedRoute } from './components/ProtectedRoute';
 import { ThemeSync } from './components/ThemeSync';
 import { ToastViewport } from './components/ui/Toast';
@@ -88,7 +90,24 @@ export function App() {
                     </ProtectedRoute>
                   }
                 />
+                <Route
+                  path="integrations"
+                  element={
+                    <ProtectedRoute roles={['ADMIN']}>
+                      <SettingsIntegrations />
+                    </ProtectedRoute>
+                  }
+                />
               </Route>
+
+              <Route
+                path="/api-test"
+                element={
+                  <ProtectedRoute roles={['ADMIN']}>
+                    <ApiTestPage />
+                  </ProtectedRoute>
+                }
+              />
 
               <Route path="*" element={<Navigate to="/dashboard" replace />} />
             </Route>

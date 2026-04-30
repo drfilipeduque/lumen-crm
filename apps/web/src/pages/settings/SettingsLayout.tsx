@@ -18,6 +18,7 @@ const ITEMS: SubItem[] = [
   { path: '/settings/pipelines',      label: 'Pipelines',            description: 'Funis e etapas',       roles: ['ADMIN'] },
   { path: '/settings/custom-fields',  label: 'Campos Personalizados', description: 'Campos extras das oportunidades', roles: ['ADMIN'] },
   { path: '/settings/tags',           label: 'Tags',                 description: 'Etiquetas dos leads',  roles: ['ADMIN'] },
+  { path: '/settings/integrations',   label: 'Integrações de IA',    description: 'Chaves Claude/OpenAI', roles: ['ADMIN'] },
 ];
 
 export function SettingsLayout() {
