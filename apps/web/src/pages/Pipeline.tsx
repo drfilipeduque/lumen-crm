@@ -28,6 +28,7 @@ import { useAuthStore } from '../stores/useAuthStore';
 import { usePipelines } from '../hooks/usePipelines';
 import { useTags, type Tag } from '../hooks/useTags';
 import { useTeam, type TeamMember } from '../hooks/useTeam';
+import { StartCadenceForTarget } from '../components/cadences/StartCadenceForTarget';
 import {
   buildBoardExportUrl,
   useBoard,
@@ -1297,6 +1298,7 @@ function OpportunityCard({
   const navigate = useNavigate();
   const [hover, setHover] = useState(false);
   const [reminderOpen, setReminderOpen] = useState(false);
+  const [cadenceOpen, setCadenceOpen] = useState(false);
 
   const accentLeft =
     card.priority === 'URGENT' || card.priority === 'HIGH' ? PRIORITY_COLOR[card.priority] : null;
@@ -1462,6 +1464,7 @@ function OpportunityCard({
         >
           <QuickActionBtn icon="Chat" title="Mensagem" onClick={() => toast('Chat ainda não implementado', 'info')} />
           <QuickActionBtn icon="Bell" title="Lembrete" onClick={() => setReminderOpen(true)} />
+          <QuickActionBtn icon="Bolt" title="Iniciar cadência" onClick={() => setCadenceOpen(true)} />
         </div>
       )}
 
@@ -1472,6 +1475,12 @@ function OpportunityCard({
           onClose={() => setReminderOpen(false)}
         />
       )}
+
+      <StartCadenceForTarget
+        open={cadenceOpen}
+        onClose={() => setCadenceOpen(false)}
+        target={{ kind: 'opportunity', opportunityId: card.id, label: card.title }}
+      />
     </div>
   );
 }

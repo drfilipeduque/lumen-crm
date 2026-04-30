@@ -27,6 +27,7 @@ import {
 import { useTeam } from '../hooks/useTeam';
 import { useTags } from '../hooks/useTags';
 import { useWhatsAppConnections } from '../hooks/useWhatsApp';
+import { useContactCadences, usePauseExecution, useResumeExecution } from '../hooks/useCadences';
 import { usePipeline, usePipelines } from '../hooks/usePipelines';
 import { useSocketEvent } from '../hooks/useSocketIO';
 import { ScriptsPopover, type RenderedScript } from '../components/conversations/ScriptsPopover';
@@ -2116,6 +2117,8 @@ function RightPanel({
           )}
         </Section>
 
+        <ContactCadencesSection contactId={detail.contact.id} />
+
         {detail.nextReminder && (
           <Section label="Próximo lembrete">
             <div
@@ -2177,6 +2180,86 @@ function RightPanel({
         />
       )}
     </>
+  );
+}
+
+// Mostra cadências ativas/pausadas pra esse contato + botão pausar/retomar inline.
+function ContactCadencesSection({ contactId }: { contactId: string }) {
+  const { tokens: t } = useTheme();
+  const { data, isLoading } = useContactCadences(contactId);
+  const pause = usePauseExecution();
+  const resume = useResumeExecution();
+
+  if (isLoading) return null;
+  if (!data || data.length === 0) return null;
+
+  return (
+    <Section label="Cadências">
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        {data.map((ex) => {
+          const total = ex.cadence?.messages?.length ?? 0;
+          const isPaused = ex.status === 'PAUSED';
+          return (
+            <div
+              key={ex.id}
+              style={{
+                padding: 10,
+                borderRadius: 8,
+                background: t.bg,
+                border: `1px solid ${t.border}`,
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 4,
+              }}
+            >
+              <div style={{ fontSize: 12, color: t.text, fontWeight: 600 }}>
+                {ex.cadence?.name ?? 'Cadência'}
+              </div>
+              <div style={{ fontSize: 11, color: t.textDim }}>
+                Passo {ex.currentStep + 1}/{total}
+                {' · '}
+                {isPaused ? `Pausada${ex.pauseReason ? ` (${ex.pauseReason})` : ''}` : 'Ativa'}
+              </div>
+              <div style={{ display: 'flex', gap: 6, marginTop: 4 }}>
+                {isPaused ? (
+                  <button
+                    type="button"
+                    onClick={() => resume.mutateAsync(ex.id).then(() => toast('Retomada', 'success'))}
+                    style={{
+                      padding: '4px 8px',
+                      fontSize: 11,
+                      borderRadius: 6,
+                      background: t.bgInput,
+                      color: t.text,
+                      border: `1px solid ${t.border}`,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    Retomar
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => pause.mutateAsync(ex.id).then(() => toast('Pausada', 'success'))}
+                    style={{
+                      padding: '4px 8px',
+                      fontSize: 11,
+                      borderRadius: 6,
+                      background: t.bgInput,
+                      color: t.text,
+                      border: `1px solid ${t.border}`,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    Pausar
+                  </button>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </Section>
   );
 }
 

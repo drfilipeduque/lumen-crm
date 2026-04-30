@@ -28,6 +28,7 @@ import {
 } from '../hooks/useContacts';
 import { useTags, type Tag } from '../hooks/useTags';
 import { useTeam, type TeamMember } from '../hooks/useTeam';
+import { StartCadenceForTarget } from '../components/cadences/StartCadenceForTarget';
 
 const PAGE_SIZES = [25, 50, 100];
 
@@ -874,6 +875,7 @@ function ContactRow({
   const [hover, setHover] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [cadenceModal, setCadenceModal] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   useClickOutside(menuRef, () => setMenuOpen(false), menuOpen);
 
@@ -1036,6 +1038,7 @@ function ContactRow({
             }}
           >
             <MenuItem label="Editar" onClick={() => { setMenuOpen(false); onEdit(); }} />
+            <MenuItem label="Iniciar cadência" onClick={() => { setMenuOpen(false); setCadenceModal(true); }} />
             <MenuItem label="Excluir" danger onClick={() => { setMenuOpen(false); setConfirmDelete(true); }} />
           </div>
         )}
@@ -1054,6 +1057,12 @@ function ContactRow({
         danger
         onConfirm={handleDelete}
         onClose={() => setConfirmDelete(false)}
+      />
+
+      <StartCadenceForTarget
+        open={cadenceModal}
+        onClose={() => setCadenceModal(false)}
+        target={{ kind: 'contact', contactId: contact.id, label: contact.name }}
       />
     </div>
   );
