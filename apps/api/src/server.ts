@@ -26,6 +26,7 @@ import {
   whatsappConnectionsRoutes,
   whatsappEntryRulesRoutes,
 } from './modules/whatsapp/connections.routes.js';
+import { whatsappRoutingConfigRoutes } from './modules/whatsapp/routing-config.routes.js';
 import { conversationMessagesRoutes } from './modules/whatsapp/messages.routes.js';
 import { conversationsRoutes } from './modules/whatsapp/conversations.routes.js';
 import { restoreAllSessions } from './modules/whatsapp/baileys/session-manager.js';
@@ -92,6 +93,7 @@ await app.register(remindersRoutes, { prefix: '/reminders' });
 await app.register(whatsappConnectionsRoutes, { prefix: '/whatsapp/connections' });
 await app.register(connectionTemplatesRoutes, { prefix: '/whatsapp/connections' });
 await app.register(whatsappEntryRulesRoutes, { prefix: '/whatsapp/entry-rules' });
+await app.register(whatsappRoutingConfigRoutes, { prefix: '/whatsapp/routing-config' });
 await app.register(conversationsRoutes, { prefix: '/conversations' });
 await app.register(conversationMessagesRoutes, { prefix: '/conversations' });
 // Webhook da Meta — rota pública (sem auth), assinatura HMAC validada na rota.
