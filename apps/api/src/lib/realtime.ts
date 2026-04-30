@@ -57,6 +57,7 @@ export type RealtimeEventMap = {
     profileName?: string | null;
     avatar?: string | null;
   };
+  'automation:notify': { title: string; message: string; automationId: string };
 };
 
 export function emitToUser<E extends keyof RealtimeEventMap>(
