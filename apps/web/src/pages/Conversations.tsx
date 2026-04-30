@@ -1381,29 +1381,28 @@ function Composer({
     setAttached(null);
   };
 
-  const handleSend = async () => {
+  const handleSend = () => {
     const content = text.trim();
-    if ((!content && !attached) || sending) return;
-    setSending(true);
-    try {
-      if (attached) {
-        await onSend({
+    if (!content && !attached) return;
+
+    const payload: SendMessageInput = attached
+      ? {
           type: attached.type,
           content: content || null,
           mediaUrl: attached.url,
           mediaName: attached.name,
           mediaMimeType: attached.mimeType,
-        });
-      } else {
-        await onSend({ type: 'TEXT', content });
-      }
-      setText('');
-      cancelAttachment();
-    } catch (e) {
+        }
+      : { type: 'TEXT', content };
+
+    // Limpa o input imediatamente — a mensagem otimista já aparece no chat
+    // via onMutate de useSendMessage; o POST roda em segundo plano.
+    setText('');
+    cancelAttachment();
+
+    void onSend(payload).catch((e) => {
       toast(axiosMsg(e) || 'Falha ao enviar', 'error');
-    } finally {
-      setSending(false);
-    }
+    });
   };
 
   const handleAudioReady = async (blob: Blob) => {
@@ -1677,7 +1676,7 @@ function Composer({
             onKeyDown={(e) => {
               if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
-                void handleSend();
+                handleSend();
               }
             }}
             placeholder={

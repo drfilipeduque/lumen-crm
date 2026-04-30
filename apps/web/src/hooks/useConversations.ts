@@ -220,12 +220,66 @@ export type SendMessageInput = {
   mediaMimeType?: string | null;
 };
 
+type MessagesCache = { pages: MessagesPage[]; pageParams: unknown[] };
+
 export function useSendMessage() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ id, ...input }: SendMessageInput & { id: string }) =>
       (await api.post<Message>(`/conversations/${id}/messages`, input)).data,
+    onMutate: async ({ id, ...input }) => {
+      const queryKey = [MSG_KEY, id];
+      // Cancela refetches em vôo pra não sobrescrever a otimista
+      await qc.cancelQueries({ queryKey });
+
+      const tempId = `tmp-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+      const now = new Date().toISOString();
+      const optimistic: Message = {
+        id: tempId,
+        conversationId: id,
+        fromMe: true,
+        type: input.type,
+        content: input.content ?? null,
+        mediaUrl: input.mediaUrl ?? null,
+        mediaName: input.mediaName ?? null,
+        mediaSize: null,
+        status: 'SENT',
+        externalId: null,
+        sentAt: now,
+        deliveredAt: null,
+        readAt: null,
+        createdAt: now,
+      };
+
+      const previous = qc.getQueryData<MessagesCache>(queryKey);
+      // Páginas vêm com a mais NOVA primeiro; cada página em ordem cronológica asc.
+      // A otimista vai no fim de pages[0] (final do feed).
+      if (previous && previous.pages[0]) {
+        const pages = previous.pages.slice();
+        pages[0] = { ...pages[0], data: [...pages[0].data, optimistic] };
+        qc.setQueryData<MessagesCache>(queryKey, { ...previous, pages });
+      } else {
+        qc.setQueryData<MessagesCache>(queryKey, {
+          pages: [{ data: [optimistic], hasMore: false }],
+          pageParams: [undefined],
+        });
+      }
+
+      return { queryKey, tempId };
+    },
+    onError: (_err, _vars, ctx) => {
+      if (!ctx) return;
+      const data = qc.getQueryData<MessagesCache>(ctx.queryKey);
+      if (!data) return;
+      // Marca otimista como FAILED (mantém visível pro usuário entender o erro)
+      const pages = data.pages.map((p) => ({
+        ...p,
+        data: p.data.map((m) => (m.id === ctx.tempId ? { ...m, status: 'FAILED' as const } : m)),
+      }));
+      qc.setQueryData<MessagesCache>(ctx.queryKey, { ...data, pages });
+    },
     onSuccess: (_, vars) => {
+      // Refetch substitui a otimista pela mensagem real persistida
       qc.invalidateQueries({ queryKey: [MSG_KEY, vars.id] });
       qc.invalidateQueries({ queryKey: [LIST_KEY] });
     },
