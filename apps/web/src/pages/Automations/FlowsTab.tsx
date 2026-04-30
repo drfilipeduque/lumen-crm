@@ -17,7 +17,7 @@ import {
   type Flow,
 } from '../../hooks/useAutomations';
 import { useAutomationLogStats } from '../../hooks/useAutomationLogs';
-import { TRIGGER_LABELS } from './flow-editor/labels';
+import { TRIGGER_CATEGORIES, findItem } from './flow-builder/sections';
 
 export function FlowsTab() {
   const { tokens: t } = useTheme();
@@ -140,7 +140,7 @@ function FlowCard({
   const success30 = stats30.data?.byType.AUTOMATION?.success ?? 0;
   const successPct = total30 > 0 ? Math.round((success30 / total30) * 100) : null;
 
-  const triggerLabel = TRIGGER_LABELS[a.triggerType] ?? a.triggerType;
+  const triggerLabel = findItem(TRIGGER_CATEGORIES, a.triggerType)?.item.label ?? a.triggerType;
 
   return (
     <div

@@ -11,7 +11,7 @@ import { WhatsAppPage } from './pages/WhatsApp';
 import { ConversationsPage } from './pages/Conversations';
 import { PagePlaceholder } from './pages/PagePlaceholder';
 import { AutomationsPage } from './pages/Automations';
-import { FlowEditor } from './pages/Automations/FlowEditor';
+import { FlowBuilder } from './pages/Automations/FlowBuilder';
 import { SettingsLayout } from './pages/settings/SettingsLayout';
 import { SettingsSection } from './pages/settings/SettingsSection';
 import { SettingsAccount } from './pages/settings/SettingsAccount';
@@ -55,7 +55,7 @@ export function App() {
                 path="/automations/flows/:id"
                 element={
                   <ProtectedRoute roles={['ADMIN']}>
-                    <FlowEditor />
+                    <FlowBuilder />
                   </ProtectedRoute>
                 }
               />
