@@ -139,6 +139,7 @@ enum AutomationLogStatus {
   SUCCESS
   FAILED
   RUNNING
+  PARTIAL
 }
 
 enum AIProvider {
