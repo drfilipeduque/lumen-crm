@@ -26,7 +26,6 @@ import {
   type FlowValidationError,
 } from '../../hooks/useAutomations';
 import { TriggerSection } from './flow-builder/TriggerSection';
-import { ConditionsSection } from './flow-builder/ConditionsSection';
 import { ActionsSection } from './flow-builder/ActionsSection';
 import { DryRunModal } from './flow-builder/DryRunModal';
 import { builderToFlow, flowToBuilder, EMPTY_STATE, type BuilderState } from './flow-builder/model';
@@ -65,9 +64,6 @@ export function FlowBuilder() {
   const localErrors = useMemo(() => {
     const e: FlowValidationError[] = [];
     if (!state.trigger) e.push({ code: 'NO_TRIGGER', message: 'Selecione um gatilho' });
-    for (const c of state.conditions) {
-      if (!c.subtype) e.push({ nodeId: c.id, code: 'EMPTY_CONDITION', message: 'Condição sem tipo escolhido' });
-    }
     for (const a of state.actions) {
       if (!a.subtype) e.push({ nodeId: a.id, code: 'EMPTY_ACTION', message: 'Ação sem tipo escolhido' });
     }
@@ -279,14 +275,6 @@ export function FlowBuilder() {
             value={state.trigger}
             onChange={(trigger) => setState((s) => ({ ...s, trigger, legacyFlow: null }))}
             errors={triggerErrors}
-          />
-
-          <ConditionsSection
-            mode={state.conditionMode}
-            onModeChange={(conditionMode) => setState((s) => ({ ...s, conditionMode, legacyFlow: null }))}
-            conditions={state.conditions}
-            onChange={(conditions) => setState((s) => ({ ...s, conditions, legacyFlow: null }))}
-            triggerSubtype={triggerSubtype}
           />
 
           <ActionsSection
