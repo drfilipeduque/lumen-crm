@@ -21,14 +21,16 @@ import {
 import { usePipeline, usePipelines } from '../hooks/usePipelines';
 import { ScriptsTab } from './whatsapp/ScriptsTab';
 import { OfficialTab } from './whatsapp/OfficialTab';
+import { RoutingTab } from './whatsapp/RoutingTab';
 
-type Tab = 'official' | 'unofficial' | 'scripts' | 'rules';
+type Tab = 'official' | 'unofficial' | 'scripts' | 'rules' | 'routing';
 
 const TABS: { key: Tab; label: string }[] = [
   { key: 'official', label: 'API Oficial' },
   { key: 'unofficial', label: 'API Não Oficial' },
   { key: 'scripts', label: 'Scripts' },
   { key: 'rules', label: 'Regras de Entrada' },
+  { key: 'routing', label: 'Roteamento' },
 ];
 
 // ============================================================
@@ -106,6 +108,7 @@ export function WhatsAppPage() {
         {tab === 'unofficial' && <UnofficialTab />}
         {tab === 'scripts' && <ScriptsTab />}
         {tab === 'rules' && <RulesTab />}
+        {tab === 'routing' && <RoutingTab />}
       </div>
     </div>
   );
