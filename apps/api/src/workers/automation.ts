@@ -107,7 +107,13 @@ export function startAutomationEngine(log: FastifyBaseLogger) {
 //                                cfg: { hour: 9, minute: 0, dayOfWeek?: number }
 async function runCronTick(_kind: string, log: FastifyBaseLogger) {
   // Pega todas as automations cron ativas. Como triggerType é denormalizado, fica direto.
-  const cronTriggers = ['opportunity_stale_in_stage', 'opportunity_inactive', 'due_date_approaching', 'scheduled'];
+  const cronTriggers = [
+    'opportunity_stale_in_stage',
+    'opportunity_inactive',
+    'due_date_approaching',
+    'scheduled',
+    'message_unanswered',
+  ];
   const list = await prisma.automation.findMany({
     where: { active: true, triggerType: { in: cronTriggers } },
     select: { id: true, triggerType: true, triggerConfig: true, flow: true },
@@ -207,6 +213,68 @@ async function runCronTick(_kind: string, log: FastifyBaseLogger) {
             type: 'scheduled' as never,
             data: {},
           });
+          break;
+        }
+        case 'message_unanswered': {
+          // Detecta conversas onde a última mensagem foi enviada num dos lados
+          // e ninguém respondeu há `hours` horas.
+          const hours = Number(cfg.hours ?? 0);
+          if (hours <= 0) continue;
+          const direction = (cfg.direction as 'CLIENT_WAITING' | 'US_WAITING' | undefined) ?? 'US_WAITING';
+          const cfgConnId = cfg.connectionId as string | undefined;
+          const cfgConnType = cfg.connectionType as 'OFFICIAL' | 'UNOFFICIAL' | undefined;
+          const cutoff = new Date(now.getTime() - hours * 3_600_000);
+
+          // Direction:
+          //   US_WAITING       → última msg foi nossa (fromMe=true), cliente sumiu
+          //   CLIENT_WAITING   → última msg foi do cliente (fromMe=false), nós sumimos
+          const lastFromMe = direction === 'US_WAITING';
+          const convs = await prisma.conversation.findMany({
+            where: {
+              status: 'OPEN',
+              lastMessageAt: { lt: cutoff },
+              ...(cfgConnId ? { connectionId: cfgConnId } : {}),
+              ...(cfgConnType ? { connection: { type: cfgConnType } } : {}),
+            },
+            select: {
+              id: true,
+              contactId: true,
+              connectionId: true,
+              lastMessageAt: true,
+              connection: { select: { type: true } },
+              messages: {
+                orderBy: { createdAt: 'desc' },
+                take: 1,
+                select: { id: true, fromMe: true, createdAt: true },
+              },
+            },
+            take: 200,
+          });
+
+          for (const conv of convs) {
+            const last = conv.messages[0];
+            if (!last) continue;
+            if (last.fromMe !== lastFromMe) continue;
+            // Idempotência via Redis: 1 disparo por conversation + automation
+            // a cada janela de `hours`. TTL = hours*3600s mais um buffer.
+            const dedupeKey = `cron:msg-unanswered:${a.id}:${conv.id}:${last.id}`;
+            const set = await redis.set(dedupeKey, '1', 'EX', Math.max(60, hours * 3600), 'NX');
+            if (set !== 'OK') continue;
+            await fireDirect(a.id, 'cron:message-unanswered', {
+              type: 'message.unanswered' as never,
+              entityId: conv.id,
+              data: {
+                conversationId: conv.id,
+                contactId: conv.contactId,
+                connectionId: conv.connectionId,
+                connectionType: conv.connection.type,
+                direction,
+                lastMessageId: last.id,
+                lastMessageAt: last.createdAt.toISOString(),
+                hours,
+              },
+            });
+          }
           break;
         }
       }
