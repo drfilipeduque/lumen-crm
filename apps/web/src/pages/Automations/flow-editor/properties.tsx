@@ -13,9 +13,54 @@ import { useTags } from '../../../hooks/useTags';
 import { useTeam } from '../../../hooks/useTeam';
 import { useAIIntegrations } from '../../../hooks/useAIIntegrations';
 import { useWhatsAppConnections } from '../../../hooks/useWhatsApp';
+import { useTemplates } from '../../../hooks/useTemplates';
 import { labelFor } from './labels';
 import type { Node } from '@xyflow/react';
 import type { FlowNodeData } from './nodes';
+
+// Mapeamentos cascading: campo de pipeline → campo de etapa que depende dele.
+const PIPELINE_STAGE_CASCADES: Record<string, string[]> = {
+  pipelineId: ['stageId'],
+  fromPipelineId: ['fromStageId'],
+  toPipelineId: ['toStageId'],
+  targetPipelineId: ['targetStageId'],
+};
+
+// Enums conhecidos pra dropdowns dedicados.
+const ENUM_OPTIONS: Record<string, { value: string; label: string }[]> = {
+  matchType: [
+    { value: 'any', label: 'Qualquer (any)' },
+    { value: 'all', label: 'Todas (all)' },
+  ],
+  direction: [
+    { value: 'CLIENT_WAITING', label: 'Cliente esperando resposta nossa' },
+    { value: 'US_WAITING', label: 'Aguardando resposta do cliente' },
+  ],
+  connectionType: [
+    { value: 'OFFICIAL', label: 'Oficial (Meta)' },
+    { value: 'UNOFFICIAL', label: 'Não oficial (Baileys)' },
+  ],
+  customFieldStrategy: [
+    { value: 'KEEP_COMPATIBLE', label: 'Manter campos compatíveis' },
+    { value: 'DISCARD_ALL', label: 'Descartar todos' },
+    { value: 'MAP', label: 'Mapear manualmente' },
+  ],
+  connectionStrategy: [
+    { value: 'DEFAULT', label: 'Padrão do responsável' },
+    { value: 'SPECIFIC', label: 'Conexão específica' },
+    { value: 'TYPE_PREFERRED', label: 'Preferir tipo' },
+  ],
+  preferredType: [
+    { value: 'OFFICIAL', label: 'Oficial (Meta)' },
+    { value: 'UNOFFICIAL', label: 'Não oficial (Baileys)' },
+  ],
+  priority: [
+    { value: 'LOW', label: 'Baixa' },
+    { value: 'MEDIUM', label: 'Média' },
+    { value: 'HIGH', label: 'Alta' },
+    { value: 'URGENT', label: 'Urgente' },
+  ],
+};
 
 const VARIABLES = [
   '{{contact.name}}',
@@ -157,6 +202,32 @@ function ConfigForm({
   const pipelineDetail = usePipeline(selectedPipelineId || null);
   const stages = pipelineDetail.data?.stages ?? [];
 
+  // Cascades adicionais: cada par (pipelineField → stageField) precisa do seu
+  // próprio stages list. Carregamos lazy só os usados pelo subtype.
+  const fromPipelineId = (config.fromPipelineId as string | undefined) ?? '';
+  const toPipelineId = (config.toPipelineId as string | undefined) ?? '';
+  const targetPipelineId = (config.targetPipelineId as string | undefined) ?? '';
+  const fromPipelineDetail = usePipeline(fromPipelineId || null);
+  const toPipelineDetail = usePipeline(toPipelineId || null);
+  const targetPipelineDetail = usePipeline(targetPipelineId || null);
+  const stagesByPipeField: Record<string, { id: string; name: string }[]> = {
+    stageId: stages,
+    fromStageId: fromPipelineDetail.data?.stages ?? [],
+    toStageId: toPipelineDetail.data?.stages ?? [],
+    targetStageId: targetPipelineDetail.data?.stages ?? [],
+  };
+  const noPipelineByStageField: Record<string, boolean> = {
+    stageId: !selectedPipelineId,
+    fromStageId: !fromPipelineId,
+    toStageId: !toPipelineId,
+    targetStageId: !targetPipelineId,
+  };
+
+  // Form especial pra send_whatsapp_message — UI mais rica de seções.
+  if (type === 'action' && subtype === 'send_whatsapp_message') {
+    return <SendWhatsAppForm config={config} setField={setField} />;
+  }
+
   // Render genérico baseado nas configFields do catalog.
   if (def) {
     return (
@@ -178,10 +249,27 @@ function ConfigForm({
               </Field>
             );
           }
-          if (f.type === 'pipeline' || f.name === 'pipelineId') {
+          if (
+            f.type === 'pipeline' ||
+            f.name === 'pipelineId' ||
+            f.name === 'fromPipelineId' ||
+            f.name === 'toPipelineId' ||
+            f.name === 'targetPipelineId'
+          ) {
             return (
               <Field key={f.name} label={f.label}>
-                <select value={(v as string) ?? ''} onChange={(e) => setField(f.name, e.target.value)} style={input(t)}>
+                <select
+                  value={(v as string) ?? ''}
+                  onChange={(e) => {
+                    setField(f.name, e.target.value);
+                    // Quando troca o funil, limpa a etapa que dependia dele
+                    const stageDeps = PIPELINE_STAGE_CASCADES[f.name];
+                    if (stageDeps) {
+                      for (const stageField of stageDeps) setField(stageField, '');
+                    }
+                  }}
+                  style={input(t)}
+                >
                   <option value="">— escolha —</option>
                   {(pipelines.data ?? []).map((p) => (
                     <option key={p.id} value={p.id}>
@@ -192,8 +280,9 @@ function ConfigForm({
               </Field>
             );
           }
-          if (f.type === 'stage' || f.name === 'stageId' || f.name === 'fromStageId' || f.name === 'toStageId') {
-            const noPipeline = !selectedPipelineId;
+          if (f.type === 'stage' || f.name === 'stageId' || f.name === 'fromStageId' || f.name === 'toStageId' || f.name === 'targetStageId') {
+            const stageList = stagesByPipeField[f.name] ?? stages;
+            const noPipeline = noPipelineByStageField[f.name] ?? !selectedPipelineId;
             return (
               <Field key={f.name} label={f.label}>
                 <select
@@ -203,9 +292,25 @@ function ConfigForm({
                   style={{ ...input(t), opacity: noPipeline ? 0.5 : 1 }}
                 >
                   <option value="">{noPipeline ? '— selecione um funil primeiro —' : '— escolha —'}</option>
-                  {stages.map((s) => (
+                  {stageList.map((s) => (
                     <option key={s.id} value={s.id}>
                       {s.name}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+            );
+          }
+          // Enums conhecidos por nome de campo (matchType, direction, etc.)
+          const enumOpts = ENUM_OPTIONS[f.name];
+          if (enumOpts) {
+            return (
+              <Field key={f.name} label={f.label}>
+                <select value={(v as string) ?? ''} onChange={(e) => setField(f.name, e.target.value)} style={input(t)}>
+                  <option value="">— escolha —</option>
+                  {enumOpts.map((o) => (
+                    <option key={o.value} value={o.value}>
+                      {o.label}
                     </option>
                   ))}
                 </select>
@@ -436,6 +541,221 @@ function Field({ label, action, children }: { label: string; action?: React.Reac
       </div>
       {children}
     </div>
+  );
+}
+
+// =====================================================================
+// Form especializado: send_whatsapp_message
+// =====================================================================
+
+function SendWhatsAppForm({
+  config,
+  setField,
+}: {
+  config: Record<string, unknown>;
+  setField: (k: string, v: unknown) => void;
+}) {
+  const { tokens: t } = useTheme();
+  const connections = useWhatsAppConnections();
+  const strategy = (config.connectionStrategy as string | undefined) ?? 'DEFAULT';
+  const fallback = (config.fallback as Record<string, unknown> | undefined) ?? {};
+  const setFallback = (k: string, v: unknown) => setField('fallback', { ...fallback, [k]: v });
+  const fallbackEnabled = Boolean(fallback.enabled);
+  const useTemplate = Boolean(fallback.useTemplate);
+  const fallbackToOther = Boolean(fallback.fallbackToOtherConnection);
+
+  const fbConnId = (fallback.fallbackConnectionId as string | undefined) ?? null;
+  const officialConn =
+    (config.connectionId as string | undefined) ||
+    (connections.data ?? []).find((c) => c.type === 'OFFICIAL')?.id ||
+    null;
+  const templates = useTemplates(officialConn);
+
+  // Caminho previsto (preview)
+  const previewSteps: string[] = [];
+  if (strategy === 'SPECIFIC' && config.connectionId) {
+    const c = connections.data?.find((x) => x.id === config.connectionId);
+    previewSteps.push(`Enviar via "${c?.name ?? config.connectionId}"`);
+  } else if (strategy === 'TYPE_PREFERRED') {
+    previewSteps.push(`Tentar primeiro tipo "${(config.preferredType as string) ?? 'OFFICIAL'}"`);
+  } else {
+    previewSteps.push('Conexão padrão (do responsável ou config global)');
+  }
+  if (fallbackEnabled && useTemplate && fallback.templateId) {
+    const tmpl = templates.data?.find((x) => x.id === fallback.templateId);
+    previewSteps.push(`Se janela 24h fechada → template "${tmpl?.name ?? fallback.templateId}"`);
+  }
+  if (fallbackEnabled && fallbackToOther) {
+    previewSteps.push('Se ainda falhar → tenta próxima conexão ativa');
+  }
+
+  return (
+    <>
+      <Section label="Conteúdo" />
+      <Field
+        label="Texto (suporta {{var}})"
+        action={
+          <InsertVarBtn
+            onInsert={(token) => setField('text', ((config.text as string) ?? '') + token)}
+          />
+        }
+      >
+        <textarea
+          rows={4}
+          value={(config.text as string) ?? ''}
+          onChange={(e) => setField('text', e.target.value)}
+          style={{ ...input(t), resize: 'vertical' }}
+        />
+      </Field>
+      <Field label="ID de script (alternativa)">
+        <input
+          type="text"
+          value={(config.scriptId as string) ?? ''}
+          onChange={(e) => setField('scriptId', e.target.value || undefined)}
+          style={input(t)}
+        />
+      </Field>
+      <Field label="URL de mídia (opcional)">
+        <input
+          type="text"
+          value={(config.mediaUrl as string) ?? ''}
+          onChange={(e) => setField('mediaUrl', e.target.value || undefined)}
+          style={input(t)}
+        />
+      </Field>
+
+      <Section label="Conexão de envio" />
+      <Field label="Estratégia">
+        <select
+          value={strategy}
+          onChange={(e) => setField('connectionStrategy', e.target.value)}
+          style={input(t)}
+        >
+          <option value="DEFAULT">Padrão do responsável (recomendado)</option>
+          <option value="SPECIFIC">Conexão específica</option>
+          <option value="TYPE_PREFERRED">Preferir tipo</option>
+        </select>
+      </Field>
+      {strategy === 'SPECIFIC' && (
+        <Field label="Conexão">
+          <select
+            value={(config.connectionId as string) ?? ''}
+            onChange={(e) => setField('connectionId', e.target.value)}
+            style={input(t)}
+          >
+            <option value="">— escolha —</option>
+            {(connections.data ?? []).map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name} ({c.type})
+              </option>
+            ))}
+          </select>
+        </Field>
+      )}
+      {strategy === 'TYPE_PREFERRED' && (
+        <Field label="Tipo preferido">
+          <select
+            value={(config.preferredType as string) ?? 'OFFICIAL'}
+            onChange={(e) => setField('preferredType', e.target.value)}
+            style={input(t)}
+          >
+            <option value="OFFICIAL">Oficial (Meta)</option>
+            <option value="UNOFFICIAL">Não oficial (Baileys)</option>
+          </select>
+        </Field>
+      )}
+
+      <Section label="Fallback" />
+      <Field label="Ativar fallback se falhar">
+        <ToggleRow
+          checked={fallbackEnabled}
+          onChange={(v) => setFallback('enabled', v)}
+        />
+      </Field>
+      {fallbackEnabled && (
+        <>
+          <Field label="Usar template se janela 24h fechada (Meta)">
+            <ToggleRow checked={useTemplate} onChange={(v) => setFallback('useTemplate', v)} />
+          </Field>
+          {useTemplate && (
+            <Field label="Template de fallback">
+              <select
+                value={(fallback.templateId as string) ?? ''}
+                onChange={(e) => setFallback('templateId', e.target.value)}
+                style={input(t)}
+              >
+                <option value="">— escolha —</option>
+                {(templates.data ?? [])
+                  .filter((tt) => tt.status === 'APPROVED')
+                  .map((tt) => (
+                    <option key={tt.id} value={tt.id}>
+                      {tt.name} ({tt.language})
+                    </option>
+                  ))}
+              </select>
+            </Field>
+          )}
+          <Field label="Tentar outra conexão se a primeira falhar">
+            <ToggleRow
+              checked={fallbackToOther}
+              onChange={(v) => setFallback('fallbackToOtherConnection', v)}
+            />
+          </Field>
+        </>
+      )}
+
+      <div
+        style={{
+          marginTop: 8,
+          padding: 10,
+          borderRadius: 8,
+          background: t.bgInput,
+          border: `1px solid ${t.border}`,
+          fontSize: 11.5,
+          color: t.textDim,
+        }}
+      >
+        <div style={{ fontWeight: 600, color: t.text, marginBottom: 4 }}>Caminho previsto</div>
+        <ol style={{ margin: 0, paddingLeft: 18 }}>
+          {previewSteps.map((s, i) => (
+            <li key={i}>{s}</li>
+          ))}
+        </ol>
+      </div>
+    </>
+  );
+}
+
+function Section({ label }: { label: string }) {
+  const { tokens: t } = useTheme();
+  return (
+    <div
+      style={{
+        fontSize: 10.5,
+        fontWeight: 700,
+        color: t.textFaint,
+        textTransform: 'uppercase',
+        letterSpacing: 1,
+        marginTop: 6,
+      }}
+    >
+      {label}
+    </div>
+  );
+}
+
+function ToggleRow({ checked, onChange }: { checked: boolean; onChange: (v: boolean) => void }) {
+  const { tokens: t } = useTheme();
+  return (
+    <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 12, color: t.text }}>
+      <input
+        type="checkbox"
+        checked={checked}
+        onChange={(e) => onChange(e.target.checked)}
+        style={{ accentColor: t.gold }}
+      />
+      {checked ? 'Ativado' : 'Desativado'}
+    </label>
   );
 }
 

@@ -13,10 +13,13 @@ export const TRIGGER_LABELS: Record<string, string> = {
   message_received: 'Mensagem recebida',
   message_sent: 'Mensagem enviada',
   keyword_detected: 'Palavra-chave detectada',
+  message_unanswered: 'Mensagem sem resposta há…',
   opportunity_won: 'Oportunidade ganha',
   opportunity_lost: 'Oportunidade perdida',
+  opportunity_transferred: 'Oportunidade transferida (entre funis)',
   scheduled: 'Horário específico',
   webhook_received: 'Webhook recebido',
+  conversation_resolved: 'Conversa resolvida',
 };
 
 export const CONDITION_LABELS: Record<string, string> = {
@@ -58,6 +61,8 @@ export const ACTION_LABELS: Record<string, string> = {
   send_webhook: 'Disparar webhook',
   wait: 'Aguardar',
   notify_user: 'Notificar usuário',
+  transfer_to_pipeline: 'Transferir para outro funil',
+  resolve_conversation: 'Marcar conversa como resolvida',
   ai_generate: 'IA — Gerar texto',
   ai_classify: 'IA — Classificar',
   ai_summarize: 'IA — Resumir',
@@ -92,7 +97,9 @@ export const NODE_LIBRARY: Array<{
     items: [
       'send_whatsapp_message',
       'send_whatsapp_template',
+      'resolve_conversation',
       'move_stage',
+      'transfer_to_pipeline',
       'add_tag',
       'remove_tag',
       'assign_owner',
