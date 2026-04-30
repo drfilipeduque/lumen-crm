@@ -61,34 +61,125 @@ export async function executeAction(
 
   switch (subtype) {
     case 'send_whatsapp_message': {
-      const conversationId = cfg.conversationId as string | undefined;
       const text = cfg.text as string | undefined;
       const scriptId = cfg.scriptId as string | undefined;
+      const mediaUrl = cfg.mediaUrl as string | undefined;
       let body = text ?? '';
       if (scriptId) {
         const s = await prisma.script.findUnique({ where: { id: scriptId } });
         if (s) body = renderTemplate(s.content, ctx as unknown as Record<string, unknown>);
       }
-      // Resolve conversationId a partir do contexto se não vier no config.
-      const convId = conversationId ?? (ctx.message?.conversationId as string | undefined);
-      if (!convId) throw new ActionExecutionError('send_whatsapp_message: conversationId ausente', false);
+      const fallback = (cfg.fallback as Record<string, unknown> | undefined) ?? {};
+      const { resolveSendCandidates } = await import('./whatsapp-router.js');
+      const candidates = await resolveSendCandidates({
+        ctx,
+        conversationId: cfg.conversationId as string | undefined,
+        connectionStrategy: cfg.connectionStrategy as 'DEFAULT' | 'SPECIFIC' | 'TYPE_PREFERRED' | undefined,
+        connectionId: cfg.connectionId as string | undefined,
+        preferredType: cfg.preferredType as 'OFFICIAL' | 'UNOFFICIAL' | undefined,
+      });
+      if (candidates.length === 0) {
+        throw new ActionExecutionError('send_whatsapp_message: nenhuma conexão/conversa elegível', false);
+      }
+      const path: { conversationId: string; connectionId: string; outcome: string }[] = [];
+      const fbToOther = Boolean(fallback.fallbackToOtherConnection);
+      const tryUseTemplate = Boolean(fallback.useTemplate);
+      const fbTemplateId = fallback.templateId as string | undefined;
+      const fbTemplateVars = (fallback.templateVariables as Record<string, string> | undefined) ?? {};
       const { sendMessageToConversation } = await import('../../whatsapp/baileys/message.service.js');
-      const sent = await sendMessageToConversation(SYSTEM_ACTOR, convId, { type: 'TEXT', content: body });
-      return { kind: 'ok', output: { messageId: (sent as { id?: string })?.id } };
+      const { loadConvForSend, sendTemplateViaMeta, MetaSendError } = await import('../../whatsapp/meta/send.service.js');
+
+      const ordered = fbToOther ? candidates : candidates.slice(0, 1);
+      for (const cand of ordered) {
+        try {
+          const sent = await sendMessageToConversation(SYSTEM_ACTOR, cand.conversationId, {
+            type: mediaUrl ? 'IMAGE' : 'TEXT',
+            content: body || null,
+            mediaUrl: mediaUrl ?? null,
+          });
+          path.push({ conversationId: cand.conversationId, connectionId: cand.connectionId, outcome: 'sent' });
+          return {
+            kind: 'ok',
+            output: {
+              messageId: (sent as { id?: string })?.id,
+              connectionId: cand.connectionId,
+              connectionType: cand.connectionType,
+              path,
+            },
+          };
+        } catch (e) {
+          const err = e as { code?: string; message?: string };
+          path.push({ conversationId: cand.conversationId, connectionId: cand.connectionId, outcome: `failed:${err?.code ?? 'unknown'}` });
+          // Janela 24h fechada na Meta + fallback de template configurado
+          const isWindowClosed = err?.code === 'WINDOW_CLOSED' && cand.connectionType === 'OFFICIAL';
+          if (isWindowClosed && tryUseTemplate && fbTemplateId) {
+            try {
+              const conv = await loadConvForSend(cand.conversationId);
+              if (conv) {
+                const sent = await sendTemplateViaMeta(conv, fbTemplateId, fbTemplateVars);
+                path.push({ conversationId: cand.conversationId, connectionId: cand.connectionId, outcome: 'template_fallback' });
+                return {
+                  kind: 'ok',
+                  output: {
+                    messageId: (sent as { id?: string })?.id,
+                    connectionId: cand.connectionId,
+                    fallback: 'template',
+                    path,
+                  },
+                };
+              }
+            } catch (tplErr) {
+              const te = tplErr as { code?: string };
+              path.push({ conversationId: cand.conversationId, connectionId: cand.connectionId, outcome: `template_failed:${te?.code ?? 'unknown'}` });
+              if (tplErr instanceof MetaSendError) {
+                // continua pro próximo candidate
+              }
+            }
+          }
+          // Sem fallbackToOtherConnection: relança o erro original
+          if (!fbToOther) {
+            throw new ActionExecutionError(
+              `send_whatsapp_message: ${err?.message ?? 'falha no envio'}`,
+              true,
+            );
+          }
+        }
+      }
+      throw new ActionExecutionError(
+        `send_whatsapp_message: todas as ${ordered.length} tentativas falharam (path=${JSON.stringify(path)})`,
+        true,
+      );
     }
 
     case 'send_whatsapp_template': {
-      const conversationId = cfg.conversationId as string | undefined;
       const templateId = cfg.templateId as string | undefined;
       const variables = (cfg.variables as Record<string, string> | undefined) ?? {};
-      const convId = conversationId ?? (ctx.message?.conversationId as string | undefined);
-      if (!convId) throw new ActionExecutionError('send_whatsapp_template: conversationId ausente', false);
       if (!templateId) throw new ActionExecutionError('send_whatsapp_template: templateId ausente', false);
+      const { resolveSendCandidates } = await import('./whatsapp-router.js');
+      const candidates = await resolveSendCandidates({
+        ctx,
+        conversationId: cfg.conversationId as string | undefined,
+        connectionStrategy: (cfg.connectionStrategy as 'DEFAULT' | 'SPECIFIC' | 'TYPE_PREFERRED' | undefined) ?? 'SPECIFIC',
+        connectionId: cfg.connectionId as string | undefined,
+        preferredType: cfg.preferredType as 'OFFICIAL' | 'UNOFFICIAL' | undefined,
+      });
+      // Templates só fazem sentido na conexão OFFICIAL
+      const officialOnly = candidates.filter((c) => c.connectionType === 'OFFICIAL');
+      if (officialOnly.length === 0) {
+        throw new ActionExecutionError('send_whatsapp_template: nenhuma conexão Meta Oficial elegível', false);
+      }
       const { loadConvForSend, sendTemplateViaMeta } = await import('../../whatsapp/meta/send.service.js');
-      const conv = await loadConvForSend(convId);
+      const cand = officialOnly[0]!;
+      const conv = await loadConvForSend(cand.conversationId);
       if (!conv) throw new ActionExecutionError('send_whatsapp_template: conversa não encontrada', false);
       const sent = await sendTemplateViaMeta(conv, templateId, variables);
-      return { kind: 'ok', output: { messageId: (sent as { id?: string })?.id } };
+      return {
+        kind: 'ok',
+        output: {
+          messageId: (sent as { id?: string })?.id,
+          connectionId: cand.connectionId,
+        },
+      };
     }
 
     case 'move_stage': {
