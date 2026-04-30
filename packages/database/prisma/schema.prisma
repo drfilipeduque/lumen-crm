@@ -44,6 +44,7 @@ enum HistoryAction {
   REMINDER_CREATED
   REMINDER_COMPLETED
   DESCRIPTION_UPDATED
+  TRANSFERRED
 }
 
 enum CustomFieldType {
@@ -461,6 +462,7 @@ model WhatsAppConnection {
   templates     Template[]
   cadences      Cadence[]
   cadenceExecutions CadenceExecution[] @relation("CadenceExecutionConnection")
+  defaultForRouting WhatsAppRoutingConfig[] @relation("RoutingDefaultConnection")
 
   @@index([status])
   @@index([type])
@@ -489,6 +491,29 @@ model ConnectionEntryRule {
   stage      Stage              @relation(fields: [stageId], references: [id], onDelete: Restrict)
 
   createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// Singleton (id sempre = "default") com a estratégia padrão de roteamento
+// usada pelas actions de envio de WhatsApp quando não há override no fluxo.
+enum WhatsAppRoutingStrategy {
+  OFFICIAL_FIRST
+  UNOFFICIAL_FIRST
+  OFFICIAL_ONLY
+  UNOFFICIAL_ONLY
+}
+
+model WhatsAppRoutingConfig {
+  id                    String                  @id @default("default")
+  defaultConnectionId   String?
+  defaultStrategy       WhatsAppRoutingStrategy @default(OFFICIAL_FIRST)
+  fallbackTemplateId    String?
+  autoMarkAsRead        Boolean                 @default(false)
+  businessHoursOnly     Boolean                 @default(false)
+
+  defaultConnection  WhatsAppConnection? @relation("RoutingDefaultConnection", fields: [defaultConnectionId], references: [id], onDelete: SetNull)
+  fallbackTemplate   Template?           @relation("RoutingFallbackTemplate", fields: [fallbackTemplateId], references: [id], onDelete: SetNull)
+
   updatedAt DateTime @updatedAt
 }
 
@@ -565,6 +590,7 @@ model Template {
   buttons      Json?
 
   connection WhatsAppConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  fallbackForRouting WhatsAppRoutingConfig[] @relation("RoutingFallbackTemplate")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
