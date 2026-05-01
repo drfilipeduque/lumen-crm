@@ -21,6 +21,12 @@ import { startReminderWorker } from './workers/reminders.js';
 import { startWhatsAppQualityWorker } from './workers/whatsapp-quality.js';
 import { startAutomationEngine } from './workers/automation.js';
 import { startCadenceWorker } from './workers/cadence.js';
+import { startScheduledMessageWorker } from './workers/scheduled-message.js';
+import {
+  scheduledMessagesRoutes,
+  contactScheduledCountRoute,
+  opportunityScheduledCountRoute,
+} from './modules/scheduled-messages/scheduled-messages.routes.js';
 import { registerCadenceListeners } from './modules/cadences/cadence-listeners.js';
 import {
   whatsappConnectionsRoutes,
@@ -106,6 +112,9 @@ await app.register(aiIntegrationRoutes, { prefix: '/ai-integrations' });
 await app.register(automationLogsRoutes, { prefix: '/automation-logs' });
 await app.register(cadencesRoutes, { prefix: '/cadences' });
 await app.register(cadenceExecutionsRoutes, { prefix: '/cadence-executions' });
+await app.register(scheduledMessagesRoutes, { prefix: '/scheduled-messages' });
+await app.register(contactScheduledCountRoute, { prefix: '/contacts' });
+await app.register(opportunityScheduledCountRoute, { prefix: '/opportunities' });
 await app.register(webhooksRoutes, { prefix: '/webhooks' });
 // Receiver INBOUND público — rota sem auth global, valida X-Auth-Token no handler.
 await app.register(webhooksInboundRoutes, { prefix: '/webhooks/inbound' });
@@ -118,6 +127,7 @@ try {
   startWhatsAppQualityWorker(app.log);
   startAutomationEngine(app.log);
   startCadenceWorker(app.log);
+  startScheduledMessageWorker(app.log);
   registerCadenceListeners(app.log);
   registerWebhookDispatcher(app.log);
   // Reabre sessões WhatsApp persistidas
