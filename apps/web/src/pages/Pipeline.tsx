@@ -1444,6 +1444,14 @@ function OpportunityCard({
               🔔
             </span>
           )}
+          {card.scheduledMessagesCount > 0 && (
+            <span
+              title={`${card.scheduledMessagesCount} mensagem${card.scheduledMessagesCount === 1 ? '' : 's'} agendada${card.scheduledMessagesCount === 1 ? '' : 's'}`}
+              style={{ color: t.textDim, fontSize: 12 }}
+            >
+              🕒 {card.scheduledMessagesCount}
+            </span>
+          )}
         </div>
       </div>
 

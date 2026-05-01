@@ -21,6 +21,7 @@ export type BoardCard = {
   hasActiveReminder: boolean;
   hasOverdueReminder: boolean;
   unreadMessages: number;
+  scheduledMessagesCount: number;
   order: number;
   createdAt: string;
 };

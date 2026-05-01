@@ -46,6 +46,7 @@ export type BoardCard = {
   hasActiveReminder: boolean;
   hasOverdueReminder: boolean;
   unreadMessages: number;
+  scheduledMessagesCount: number;
   order: number;
   createdAt: string;
 };
@@ -131,6 +132,22 @@ export async function getBoard(
       : [];
   const unreadByContact = new Map(unread.map((u) => [u.contactId, u._sum.unreadCount ?? 0] as const));
 
+  // Mensagens agendadas pendentes por oportunidade (pra ícone no card)
+  const oppIds = opps.map((o) => o.id);
+  const scheduled =
+    oppIds.length > 0
+      ? await prisma.scheduledMessage.groupBy({
+          by: ['opportunityId'],
+          where: { opportunityId: { in: oppIds }, status: 'PENDING' },
+          _count: { _all: true },
+        })
+      : [];
+  const scheduledByOpp = new Map(
+    scheduled
+      .filter((s) => s.opportunityId)
+      .map((s) => [s.opportunityId as string, s._count._all] as const),
+  );
+
   const now = new Date();
   const cardsByStage = new Map<string, BoardCard[]>();
   const totalsByStage = new Map<string, number>();
@@ -154,6 +171,7 @@ export async function getBoard(
       hasActiveReminder: o.reminders.length > 0,
       hasOverdueReminder: o.reminders.some((r) => r.dueAt < now),
       unreadMessages: unreadByContact.get(o.contactId) ?? 0,
+      scheduledMessagesCount: scheduledByOpp.get(o.id) ?? 0,
       order: o.order,
       createdAt: o.createdAt.toISOString(),
     };
@@ -208,6 +226,9 @@ export async function getOpportunity(actor: Actor, id: string): Promise<Opportun
     where: { contactId: o.contactId },
     _sum: { unreadCount: true },
   });
+  const scheduledCount = await prisma.scheduledMessage.count({
+    where: { opportunityId: o.id, status: 'PENDING' },
+  });
   const now = new Date();
 
   return {
@@ -231,6 +252,7 @@ export async function getOpportunity(actor: Actor, id: string): Promise<Opportun
     hasActiveReminder: o.reminders.length > 0,
     hasOverdueReminder: o.reminders.some((r) => r.dueAt < now),
     unreadMessages: unread._sum.unreadCount ?? 0,
+    scheduledMessagesCount: scheduledCount,
     order: o.order,
     createdAt: o.createdAt.toISOString(),
     customFields: o.customFieldValues.map((v) => ({ customFieldId: v.customFieldId, value: v.value })),

@@ -8,6 +8,7 @@ import Link from '@tiptap/extension-link';
 import { useDropzone } from 'react-dropzone';
 import axios from 'axios';
 import { useTheme } from '../../lib/ThemeContext';
+import { ScheduledMessagesList } from '../scheduled-messages/ScheduledMessagesList';
 import { useAuthStore } from '../../stores/useAuthStore';
 import { toast } from '../ui/Toast';
 import { TagPicker } from '../ui/TagPicker';
@@ -57,7 +58,7 @@ const PRIORITY_COLOR: Record<Priority, string> = {
   URGENT: '#ef4444',
 };
 
-type TabKey = 'geral' | 'descricao' | 'arquivos' | 'historico' | 'lembretes' | 'conversas';
+type TabKey = 'geral' | 'descricao' | 'arquivos' | 'historico' | 'lembretes' | 'agendadas' | 'conversas';
 
 const TABS: { key: TabKey; label: string }[] = [
   { key: 'geral', label: 'Geral' },
@@ -65,6 +66,7 @@ const TABS: { key: TabKey; label: string }[] = [
   { key: 'arquivos', label: 'Arquivos' },
   { key: 'historico', label: 'Histórico' },
   { key: 'lembretes', label: 'Lembretes' },
+  { key: 'agendadas', label: 'Mensagens Agendadas' },
   { key: 'conversas', label: 'Conversas' },
 ];
 
@@ -157,6 +159,12 @@ export function OpportunityPopup({
               {tab === 'arquivos' && <ArquivosTab opportunityId={opportunityId} />}
               {tab === 'historico' && <HistoricoTab opportunityId={opportunityId} />}
               {tab === 'lembretes' && <LembretesTab opportunityId={opportunityId} />}
+              {tab === 'agendadas' && (
+                <ScheduledMessagesList
+                  contactId={detail.data.contactId}
+                  opportunityId={opportunityId}
+                />
+              )}
               {tab === 'conversas' && <ConversasTab detail={detail.data} />}
             </div>
           </>
