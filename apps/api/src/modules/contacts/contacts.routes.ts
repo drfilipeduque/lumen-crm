@@ -20,6 +20,12 @@ import {
   listContacts,
   updateContact,
 } from './contacts.service.js';
+import {
+  buildImportTemplate,
+  importContactsCsv,
+  type DuplicateStrategy,
+  type ImportMapping,
+} from './contacts.import.js';
 
 function send(reply: FastifyReply, e: unknown) {
   if (e instanceof ContactError)
@@ -35,6 +41,69 @@ export const contactsRoutes: FastifyPluginAsync = async (app) => {
     if (!parsed.success)
       return reply.code(400).send({ error: 'VALIDATION', issues: parsed.error.flatten() });
     return reply.send(await listContacts(req.user!, parsed.data));
+  });
+
+  // CSV template (download)
+  app.get('/import-template', async (_req, reply) => {
+    const csv = buildImportTemplate();
+    return reply
+      .header('content-type', 'text/csv; charset=utf-8')
+      .header('content-disposition', 'attachment; filename="modelo-contatos.csv"')
+      .send(csv);
+  });
+
+  // Import CSV (multipart)
+  app.post('/import', async (req, reply) => {
+    let csvText: string | null = null;
+    let mapping: ImportMapping | null = null;
+    let tagIds: string[] | undefined;
+    let ownerId: string | undefined;
+    let duplicateStrategy: DuplicateStrategy = 'SKIP';
+
+    const parts = req.parts();
+    for await (const part of parts) {
+      if (part.type === 'file') {
+        const buf = await part.toBuffer();
+        csvText = buf.toString('utf-8');
+      } else {
+        const v = part.value as string;
+        if (part.fieldname === 'mapping') {
+          try {
+            mapping = JSON.parse(v) as ImportMapping;
+          } catch {
+            return reply.code(400).send({ error: 'VALIDATION', message: 'mapping JSON inválido' });
+          }
+        } else if (part.fieldname === 'tagIds') {
+          try {
+            tagIds = JSON.parse(v) as string[];
+          } catch {
+            return reply.code(400).send({ error: 'VALIDATION', message: 'tagIds JSON inválido' });
+          }
+        } else if (part.fieldname === 'ownerId') {
+          ownerId = v || undefined;
+        } else if (part.fieldname === 'duplicateStrategy') {
+          if (['SKIP', 'UPDATE', 'CREATE_ANYWAY'].includes(v)) {
+            duplicateStrategy = v as DuplicateStrategy;
+          }
+        }
+      }
+    }
+
+    if (!csvText) return reply.code(400).send({ error: 'VALIDATION', message: 'Arquivo CSV obrigatório' });
+    if (!mapping) return reply.code(400).send({ error: 'VALIDATION', message: 'mapping obrigatório' });
+
+    try {
+      const report = await importContactsCsv(csvText, {
+        mapping,
+        tagIds,
+        ownerId: ownerId ?? null,
+        duplicateStrategy,
+      });
+      return reply.send(report);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Falha ao importar';
+      return reply.code(400).send({ error: 'IMPORT_FAILED', message: msg });
+    }
   });
 
   app.get('/export', async (req, reply) => {
