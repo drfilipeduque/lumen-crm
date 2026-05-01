@@ -5,14 +5,16 @@
 import { useState } from 'react';
 import { useTheme } from '../../lib/ThemeContext';
 import { CadencesTab } from './CadencesTab';
+import { BroadcastsTab } from './BroadcastsTab';
 import { FlowsTab } from './FlowsTab';
 import { WebhooksTab } from './WebhooksTab';
 import { LogsTab } from './LogsTab';
 
-type TabKey = 'cadences' | 'flows' | 'webhooks' | 'logs';
+type TabKey = 'cadences' | 'broadcasts' | 'flows' | 'webhooks' | 'logs';
 
 const TABS: { key: TabKey; label: string }[] = [
   { key: 'cadences', label: 'Cadências' },
+  { key: 'broadcasts', label: 'Disparos' },
   { key: 'flows', label: 'Fluxos' },
   { key: 'webhooks', label: 'Webhooks' },
   { key: 'logs', label: 'Logs' },
@@ -58,6 +60,7 @@ export function AutomationsPage() {
 
       <div style={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
         {tab === 'cadences' && <CadencesTab />}
+        {tab === 'broadcasts' && <BroadcastsTab />}
         {tab === 'flows' && <FlowsTab />}
         {tab === 'webhooks' && <WebhooksTab />}
         {tab === 'logs' && <LogsTab />}
