@@ -5,6 +5,7 @@ import { IMaskInput } from 'react-imask';
 import { useTheme } from '../lib/ThemeContext';
 import { Drawer } from '../components/ui/Drawer';
 import { Modal } from '../components/ui/Modal';
+import { ImportContactsWizard } from '../components/contacts/ImportContactsWizard';
 import { ConfirmDialog } from '../components/ui/ConfirmDialog';
 import { Pagination } from '../components/ui/Pagination';
 import { toast } from '../components/ui/Toast';
@@ -54,6 +55,7 @@ export function LeadsPage() {
 
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [creating, setCreating] = useState(false);
+  const [importing, setImporting] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [viewingId, setViewingId] = useState<string | null>(null);
 
@@ -169,6 +171,9 @@ export function LeadsPage() {
             </h1>
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
+            <button type="button" onClick={() => setImporting(true)} style={buttonGhost(t)}>
+              Importar CSV
+            </button>
             <button type="button" onClick={exportCsv} style={buttonGhost(t)}>
               Exportar CSV
             </button>
@@ -268,6 +273,11 @@ export function LeadsPage() {
           setEditingId(null);
           setViewingId(id);
         }}
+      />
+
+      <ImportContactsWizard
+        open={importing}
+        onClose={() => setImporting(false)}
       />
 
       <ContactDetailDrawer
