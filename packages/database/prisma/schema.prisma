@@ -174,6 +174,8 @@ model User {
   conversations        Conversation[]           @relation("ConversationAssignee")
   whatsappConnections  UserWhatsAppConnection[]
   sessions             Session[]
+  broadcasts           BroadcastCampaign[]      @relation("BroadcastCreator")
+  scheduledMessages    ScheduledMessage[]       @relation("ScheduledMessageCreator")
 
   @@index([role])
 }
@@ -218,6 +220,8 @@ model Contact {
   conversations Conversation[]
   tags          Tag[]          @relation("ContactTags")
   cadenceExecutions CadenceExecution[] @relation("ContactCadenceExecutions")
+  broadcastRecipients BroadcastRecipient[] @relation("BroadcastRecipientContact")
+  scheduledMessages   ScheduledMessage[]   @relation("ContactScheduledMessages")
 
   @@index([ownerId])
   @@index([name])
@@ -294,6 +298,8 @@ model Opportunity {
   files             File[]
   history           OpportunityHistory[]
   cadenceExecutions CadenceExecution[]
+  broadcastRecipients BroadcastRecipient[] @relation("BroadcastRecipientOpportunity")
+  scheduledMessages   ScheduledMessage[]   @relation("OpportunityScheduledMessages")
 
   @@index([pipelineId])
   @@index([stageId])
@@ -463,6 +469,8 @@ model WhatsAppConnection {
   cadences      Cadence[]
   cadenceExecutions CadenceExecution[] @relation("CadenceExecutionConnection")
   defaultForRouting WhatsAppRoutingConfig[] @relation("RoutingDefaultConnection")
+  broadcasts        BroadcastCampaign[]
+  scheduledMessages ScheduledMessage[]  @relation("ConnectionScheduledMessages")
 
   @@index([status])
   @@index([type])
@@ -565,6 +573,8 @@ model Message {
   createdAt      DateTime      @default(now())
 
   conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  broadcastRecipients BroadcastRecipient[] @relation("BroadcastRecipientMessage")
+  scheduledMessage    ScheduledMessage?    @relation("ScheduledMessageMessage")
 
   @@index([conversationId, createdAt])
   @@index([externalId])
@@ -591,6 +601,7 @@ model Template {
 
   connection WhatsAppConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
   fallbackForRouting WhatsAppRoutingConfig[] @relation("RoutingFallbackTemplate")
+  broadcasts BroadcastCampaign[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -778,3 +789,144 @@ model AIIntegration {
 
   @@index([active, provider])
 }
+
+// ============================================================
+// BROADCASTS — disparos em massa via Meta Oficial
+// ============================================================
+
+enum BroadcastStatus {
+  DRAFT
+  SCHEDULED
+  SENDING
+  PAUSED
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+enum BroadcastAudienceType {
+  CONTACTS
+  OPPORTUNITIES
+}
+
+enum BroadcastRecipientStatus {
+  PENDING
+  SENT
+  DELIVERED
+  READ
+  FAILED
+  SKIPPED
+}
+
+model BroadcastCampaign {
+  id                String                @id @default(cuid())
+  name              String
+  description       String?
+  connectionId      String
+  templateId        String
+  templateVariables Json?                 // { "1": "{{contact.name}}", "2": "fixo: Promo" }
+  audienceType      BroadcastAudienceType
+  audienceFilters   Json                  // depende do audienceType
+  audienceSnapshot  Json                  // [contactId, ...] congelado na criação
+  intervalSeconds   Int                   @default(30)
+  scheduledAt       DateTime?
+  status            BroadcastStatus       @default(DRAFT)
+  totalRecipients   Int                   @default(0)
+  sentCount         Int                   @default(0)
+  deliveredCount    Int                   @default(0)
+  readCount         Int                   @default(0)
+  failedCount       Int                   @default(0)
+  pauseReason       String?
+  respectBusinessHours Boolean            @default(false)
+  createdById       String
+  startedAt         DateTime?
+  completedAt       DateTime?
+  createdAt         DateTime              @default(now())
+  updatedAt         DateTime              @updatedAt
+
+  connection WhatsAppConnection   @relation(fields: [connectionId], references: [id], onDelete: Restrict)
+  template   Template             @relation(fields: [templateId], references: [id], onDelete: Restrict)
+  createdBy  User                 @relation("BroadcastCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  recipients BroadcastRecipient[]
+
+  @@index([status, createdAt])
+  @@index([connectionId])
+  @@index([createdById])
+}
+
+model BroadcastRecipient {
+  id            String                   @id @default(cuid())
+  campaignId    String
+  contactId     String
+  opportunityId String?
+  phone         String                   // snapshot
+  status        BroadcastRecipientStatus @default(PENDING)
+  externalId    String?                  // Meta wamid retornado
+  messageId     String?                  // Message.id criada no envio
+  error         String?
+  sentAt        DateTime?
+  deliveredAt   DateTime?
+  readAt        DateTime?
+  createdAt     DateTime                 @default(now())
+  updatedAt     DateTime                 @updatedAt
+
+  campaign    BroadcastCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  contact     Contact           @relation("BroadcastRecipientContact", fields: [contactId], references: [id], onDelete: Cascade)
+  opportunity Opportunity?      @relation("BroadcastRecipientOpportunity", fields: [opportunityId], references: [id], onDelete: SetNull)
+  message     Message?          @relation("BroadcastRecipientMessage", fields: [messageId], references: [id], onDelete: SetNull)
+
+  @@unique([campaignId, contactId])
+  @@index([campaignId, status])
+  @@index([contactId])
+  @@index([externalId])
+}
+
+// ============================================================
+// SCHEDULED MESSAGES — envios individuais agendados
+// ============================================================
+
+enum ScheduledMessageStatus {
+  PENDING
+  SENT
+  FAILED
+  CANCELLED
+}
+
+enum ScheduledMessageContentType {
+  TEXT
+  TEMPLATE
+  SCRIPT
+}
+
+model ScheduledMessage {
+  id                String                      @id @default(cuid())
+  contactId         String
+  opportunityId     String?
+  connectionId      String
+  scheduledAt       DateTime
+  contentType       ScheduledMessageContentType
+  content           String                      // texto livre, scriptId ou templateId
+  templateVariables Json?
+  mediaUrl          String?
+  mediaName         String?
+  mediaMimeType     String?
+  status            ScheduledMessageStatus      @default(PENDING)
+  sentAt            DateTime?
+  error             String?
+  messageId         String?                     @unique
+  createdById       String
+  createdAt         DateTime                    @default(now())
+  updatedAt         DateTime                    @updatedAt
+
+  contact     Contact            @relation("ContactScheduledMessages", fields: [contactId], references: [id], onDelete: Cascade)
+  opportunity Opportunity?       @relation("OpportunityScheduledMessages", fields: [opportunityId], references: [id], onDelete: SetNull)
+  connection  WhatsAppConnection @relation("ConnectionScheduledMessages", fields: [connectionId], references: [id], onDelete: Restrict)
+  message     Message?           @relation("ScheduledMessageMessage", fields: [messageId], references: [id], onDelete: SetNull)
+  createdBy   User               @relation("ScheduledMessageCreator", fields: [createdById], references: [id], onDelete: Restrict)
+
+  @@index([scheduledAt, status])
+  @@index([contactId, status])
+  @@index([opportunityId, status])
+  @@index([connectionId])
+}
+
