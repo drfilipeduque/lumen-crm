@@ -11,7 +11,7 @@ const messageSchema = z.object({
   mediaType: z.enum(['IMAGE', 'AUDIO', 'DOCUMENT', 'VIDEO']).optional(),
   delay: z.object({
     value: z.number().int().nonnegative(),
-    unit: z.enum(['minutes', 'hours', 'days', 'weeks']),
+    unit: z.enum(['seconds', 'minutes', 'hours', 'days', 'weeks']),
   }),
 });
 

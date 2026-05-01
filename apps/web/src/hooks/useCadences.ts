@@ -3,7 +3,7 @@ import { api } from '../lib/api';
 
 export type CadenceScope = 'PIPELINE' | 'STAGE' | 'OPPORTUNITY' | 'CONTACT' | 'GROUP';
 export type CadenceExecStatus = 'ACTIVE' | 'PAUSED' | 'COMPLETED' | 'CANCELLED' | 'FAILED';
-export type CadenceUnit = 'minutes' | 'hours' | 'days' | 'weeks';
+export type CadenceUnit = 'seconds' | 'minutes' | 'hours' | 'days' | 'weeks';
 
 export type CadenceMessage = {
   id: string;

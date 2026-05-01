@@ -20,7 +20,7 @@ export class CadenceError extends Error {
 export type CadenceMessageDelay = {
   // 0 (imediato) é válido só na primeira mensagem.
   value: number;
-  unit: 'minutes' | 'hours' | 'days' | 'weeks';
+  unit: 'seconds' | 'minutes' | 'hours' | 'days' | 'weeks';
 };
 
 export type CadenceMessage = {
@@ -253,6 +253,8 @@ export async function listExecutions(
 // Resolve a "data inicial" pro primeiro step. Imediato = agora.
 function delayMs(d: CadenceMessageDelay): number {
   switch (d.unit) {
+    case 'seconds':
+      return d.value * 1_000;
     case 'minutes':
       return d.value * 60_000;
     case 'hours':

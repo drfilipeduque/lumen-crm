@@ -625,6 +625,7 @@ function MessageCard({
             onChange={(e) => onChange({ ...m, delay: { ...m.delay, unit: e.target.value as CadenceUnit } })}
             style={{ ...input(t), width: 130 }}
           >
+            <option value="seconds">Segundos</option>
             <option value="minutes">Minutos</option>
             <option value="hours">Horas</option>
             <option value="days">Dias</option>
@@ -644,6 +645,8 @@ function MessageCard({
 function unitLabel(u: CadenceUnit, v: number) {
   const plural = v !== 1;
   switch (u) {
+    case 'seconds':
+      return plural ? 'segundos' : 'segundo';
     case 'minutes':
       return plural ? 'minutos' : 'minuto';
     case 'hours':
