@@ -119,7 +119,7 @@ function validateMessages(msgs: CadenceMessage[]) {
 
 export async function createCadence(input: CadenceCreateInput) {
   validateMessages(input.messages);
-  const created = await prisma.cadence.create({
+  return prisma.cadence.create({
     data: {
       name: input.name,
       description: input.description ?? null,
@@ -135,16 +135,10 @@ export async function createCadence(input: CadenceCreateInput) {
       messages: input.messages as unknown as Prisma.InputJsonValue,
     },
   });
-  // Se nasce ativa com escopo PIPELINE/STAGE/GROUP, dispara pros leads
-  // que já estão no escopo. Idempotente — não duplica execuções existentes.
-  if (created.active && ['PIPELINE', 'STAGE', 'GROUP'].includes(created.scope)) {
-    void backfillCadence(created.id).catch(() => {});
-  }
-  return created;
 }
 
 export async function updateCadence(id: string, input: Partial<CadenceCreateInput>) {
-  const before = await getCadence(id);
+  await getCadence(id);
   if (input.messages) validateMessages(input.messages);
   const data: Prisma.CadenceUpdateInput = {};
   if (input.name !== undefined) data.name = input.name;
@@ -163,31 +157,12 @@ export async function updateCadence(id: string, input: Partial<CadenceCreateInpu
   if (input.businessHoursEnd !== undefined) data.businessHoursEnd = input.businessHoursEnd;
   if (input.businessDays !== undefined) data.businessDays = input.businessDays;
   if (input.messages !== undefined) data.messages = input.messages as unknown as Prisma.InputJsonValue;
-  const updated = await prisma.cadence.update({ where: { id }, data });
-
-  // Backfill se acabou de ser ativada OU se o escopo mudou enquanto ativa.
-  const becameActive = !before.active && updated.active;
-  const scopeChanged =
-    updated.active &&
-    (before.scope !== updated.scope ||
-      JSON.stringify(before.scopeConfig) !== JSON.stringify(updated.scopeConfig));
-  if (
-    (becameActive || scopeChanged) &&
-    ['PIPELINE', 'STAGE', 'GROUP'].includes(updated.scope)
-  ) {
-    void backfillCadence(updated.id).catch(() => {});
-  }
-  return updated;
+  return prisma.cadence.update({ where: { id }, data });
 }
 
 export async function toggleCadence(id: string) {
   const c = await getCadence(id);
-  const updated = await prisma.cadence.update({ where: { id }, data: { active: !c.active } });
-  // Toggle ativando: dispara backfill pros leads que já estão no escopo.
-  if (updated.active && ['PIPELINE', 'STAGE', 'GROUP'].includes(updated.scope)) {
-    void backfillCadence(updated.id).catch(() => {});
-  }
-  return updated;
+  return prisma.cadence.update({ where: { id }, data: { active: !c.active } });
 }
 
 // Cancelando a cadência também cancela todas executions ativas.
@@ -421,67 +396,6 @@ export async function getStats(cadenceId: string) {
   });
   const replyRate = totalStarted > 0 ? +(repliedPause / totalStarted).toFixed(4) : 0;
   return { totalStarted, active, completed, paused, cancelled, failed, replyRate };
-}
-
-// =============================================================================
-// BACKFILL — chamado ao criar/ativar uma cadência com escopo PIPELINE/STAGE/GROUP
-// pra disparar pros leads que JÁ estão no escopo no momento da ativação
-// =============================================================================
-
-export async function backfillCadence(
-  cadenceId: string,
-): Promise<{ enqueued: number; skipped: number }> {
-  const cadence = await getCadence(cadenceId);
-  if (!cadence.active) return { enqueued: 0, skipped: 0 };
-  if (!['PIPELINE', 'STAGE', 'GROUP'].includes(cadence.scope)) {
-    return { enqueued: 0, skipped: 0 };
-  }
-  const cfg = (cadence.scopeConfig as Record<string, unknown>) ?? {};
-
-  const where: Prisma.OpportunityWhereInput = {};
-  if (cadence.scope === 'PIPELINE') {
-    where.pipelineId = cfg.pipelineId as string;
-  } else if (cadence.scope === 'STAGE') {
-    where.pipelineId = cfg.pipelineId as string;
-    where.stageId = cfg.stageId as string;
-  } else if (cadence.scope === 'GROUP') {
-    const tagIds = (cfg.tagIds as string[] | undefined) ?? [];
-    if (tagIds.length > 0) where.tags = { some: { id: { in: tagIds } } };
-    if (cfg.ownerId) where.ownerId = cfg.ownerId as string;
-    if (cfg.priority) where.priority = cfg.priority as Prisma.EnumPriorityFilter['equals'];
-    const valueMin = cfg.valueMin as number | undefined;
-    const valueMax = cfg.valueMax as number | undefined;
-    if (valueMin !== undefined || valueMax !== undefined) {
-      where.value = {
-        ...(valueMin !== undefined ? { gte: valueMin } : {}),
-        ...(valueMax !== undefined ? { lte: valueMax } : {}),
-      };
-    }
-  }
-
-  const ops = await prisma.opportunity.findMany({
-    where,
-    select: { id: true, contactId: true },
-    take: 5000,
-  });
-
-  let enqueued = 0;
-  let skipped = 0;
-  for (const op of ops) {
-    try {
-      const exec = await startExecution({
-        cadenceId,
-        contactId: op.contactId,
-        opportunityId: op.id,
-      });
-      // startExecution retorna a execution existente quando já há uma ACTIVE/PAUSED
-      // pra mesma combinação — assim não duplica e não bloqueia o backfill.
-      if (exec) enqueued++;
-    } catch {
-      skipped++;
-    }
-  }
-  return { enqueued, skipped };
 }
 
 // =============================================================================
