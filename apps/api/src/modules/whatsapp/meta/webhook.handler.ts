@@ -281,6 +281,33 @@ async function processStatus(connectionId: string, st: MetaStatus): Promise<void
 
   await prisma.message.update({ where: { id: msg.id }, data });
 
+  // Se a mensagem está vinculada a um BroadcastRecipient, atualiza status
+  // individual e contadores agregados da campanha.
+  const recipient = await prisma.broadcastRecipient.findFirst({
+    where: { OR: [{ messageId: msg.id }, { externalId: st.id }] },
+    select: { id: true, campaignId: true, status: true },
+  });
+  if (recipient) {
+    const recipientStatus =
+      newStatus === 'DELIVERED'
+        ? 'DELIVERED'
+        : newStatus === 'READ'
+          ? 'READ'
+          : newStatus === 'FAILED'
+            ? 'FAILED'
+            : recipient.status; // SENT mantém
+    const updateData: Record<string, unknown> = { status: recipientStatus };
+    if (newStatus === 'DELIVERED' && !ts) {
+      // ts já calculado acima
+    }
+    if (newStatus === 'DELIVERED') updateData.deliveredAt = ts;
+    if (newStatus === 'READ') updateData.readAt = ts;
+    if (newStatus === 'FAILED' && st.errors?.length) updateData.error = String(st.errors[0]?.title ?? 'Falha Meta');
+    await prisma.broadcastRecipient.update({ where: { id: recipient.id }, data: updateData });
+    const { updateCampaignProgress } = await import('../../broadcasts/broadcasts.service.js');
+    await updateCampaignProgress(recipient.campaignId).catch(() => {});
+  }
+
   // Broadcast (status update)
   const links = await prisma.userWhatsAppConnection.findMany({
     where: { connectionId },
