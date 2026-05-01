@@ -180,9 +180,9 @@ export function ScheduledMessageModal({ open, onClose, contactId, opportunityId,
           <div style={{ display: 'flex', gap: 6 }}>
             {(
               [
-                { value: 'TEXT', label: 'Texto livre' },
+                { value: 'TEXT', label: 'Texto livre', requireOfficial: false },
                 { value: 'TEMPLATE', label: 'Template oficial', requireOfficial: true },
-                { value: 'SCRIPT', label: 'Script existente' },
+                { value: 'SCRIPT', label: 'Script existente', requireOfficial: false },
               ] as const
             ).map((opt) => {
               const disabled = opt.requireOfficial && !isOfficial;

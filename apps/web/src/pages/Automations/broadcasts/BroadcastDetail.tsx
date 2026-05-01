@@ -46,11 +46,27 @@ export function BroadcastDetail({ id, onClose }: { id: string | null; onClose: (
   };
 
   return (
-    <Drawer open={!!id} onClose={onClose} title={b?.name ?? 'Carregando…'} width={780}>
+    <Drawer open={!!id} onClose={onClose} width={780}>
       {!b ? (
         <div style={{ padding: 20, color: t.textDim }}>Carregando…</div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14, padding: 20 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div style={{ fontSize: 16, fontWeight: 600, color: t.text }}>{b.name}</div>
+            <button
+              type="button"
+              onClick={onClose}
+              style={{
+                background: 'transparent',
+                border: 'none',
+                color: t.textDim,
+                cursor: 'pointer',
+                fontSize: 16,
+              }}
+            >
+              ✕
+            </button>
+          </div>
           <div style={{ fontSize: 11.5, color: t.textDim }}>
             {b.connection.name} · {b.template.name} · Criado por {b.createdBy.name}
           </div>

@@ -107,6 +107,28 @@ Pronto:
 
 Tokens definidos em `apps/web/src/index.css` e mapeados no `apps/web/tailwind.config.ts`.
 
+## Disparos
+
+Três frentes para envio de mensagens em escala:
+
+### 1. Importação em massa de Contatos (CSV)
+Em `/leads`, botão **Importar CSV** abre wizard de 3 passos: upload + mapeamento de colunas (auto-detecta cabeçalhos comuns) + configurações finais (tags, responsável, estratégia para duplicados `SKIP`/`UPDATE`). Backend processa em chunks de 100 contatos por transação.
+
+### 2. Disparos em massa (Meta Oficial)
+Aba **Disparos** em `/automations`. Wizard de 5 passos cria `BroadcastCampaign`:
+- **Conexão + template** (apenas Meta Oficial com template `APPROVED`); variáveis `{{1}}`, `{{2}}` mapeadas para `{{contact.name}}`/`{{contact.firstName}}`/`{{contact.phone}}` ou texto fixo
+- **Audiência** filtrando Contatos (tags, owner, criação, hasOpportunity) ou Oportunidades (pipelines, etapas, status, prioridade, valor, dueDate) com dedupe automático por contactId; pré-visualização mostra contagem + amostra antes de iniciar
+- **Schedule**: imediato ou agendado; intervalo 5–300s entre mensagens com semáforo (vermelho/amarelo/verde) baseado no risco para o tier de qualidade
+- **Lifecycle**: `DRAFT → SCHEDULED|SENDING ↔ PAUSED → COMPLETED|CANCELLED`. Worker BullMQ `broadcast-send` processa 1 recipient por vez (concurrency=1) e atualiza contadores via `updateCampaignProgress`. Webhook Meta atualiza status individual (DELIVERED/READ/FAILED) em `BroadcastRecipient`.
+
+### 3. Mensagens agendadas individuais
+Aba **Mensagens Agendadas** no popup de oportunidade (e similar no contato). Cria `ScheduledMessage` com:
+- Tipo de conteúdo: **Texto livre**, **Template oficial** (apenas conexão Meta) ou **Script** existente
+- Conexão a usar (Oficial ou Não Oficial — exibe badge)
+- Data/hora com presets rápidos (1h, hoje 18h, amanhã 9h, próxima segunda 9h)
+
+Cada agendamento gera 1 job delayed no BullMQ; cancelamento remove o job. Edits em PENDING reagendam. Card do Pipeline mostra ícone 🕒 quando há agendamentos pendentes.
+
 ## Construtor Simples de Automações
 
 A página `/automations/flows/:id` (FlowBuilder) usa um modelo linear estilo ClickUp em coluna única:
@@ -166,3 +188,4 @@ Toggles independentes para `keepTags`, `keepReminders`, `keepFiles`. A movimenta
 - [x] Construtor visual de Fluxos + Webhooks UI + Logs UI — Parte 3
 - [x] Roteamento Inteligente WhatsApp + Transferência entre Funis
 - [x] Construtor Simples de Automações (substitui ReactFlow)
+- [x] Disparos: importação CSV, broadcasts em massa, agendamentos individuais
