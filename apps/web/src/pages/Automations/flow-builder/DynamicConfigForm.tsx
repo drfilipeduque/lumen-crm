@@ -98,6 +98,7 @@ export function DynamicConfigForm({
           allConfig={config}
           fieldNames={fieldNames}
           setValue={(v) => onChange({ ...config, [f.name]: v })}
+          setMany={(changes) => onChange({ ...config, ...changes })}
           triggerSubtype={triggerSubtype}
           previousStepCount={previousStepCount}
         />
@@ -115,6 +116,7 @@ function FieldRow({
   allConfig,
   fieldNames,
   setValue,
+  setMany,
   triggerSubtype,
   previousStepCount,
 }: {
@@ -123,6 +125,7 @@ function FieldRow({
   allConfig: Record<string, unknown>;
   fieldNames: string[];
   setValue: (v: unknown) => void;
+  setMany: (changes: Record<string, unknown>) => void;
   triggerSubtype: string | null;
   previousStepCount: number;
 }) {
@@ -154,9 +157,28 @@ function FieldRow({
 
   // Pipeline dropdown
   if (PIPELINE_FIELDS.includes(field.name) || field.type === 'pipeline') {
+    // Stages que dependem desse pipeline (cascade) — ficam inválidas se trocar
+    // de funil. Limpamos junto pra evitar config inconsistente.
+    const dependentStages = STAGE_FIELDS.filter((sf) => {
+      const explicit = STAGE_TO_PIPELINE[sf];
+      if (explicit && fieldNames.includes(explicit)) return explicit === field.name;
+      // Stage cai no pipelineId genérico quando o explicit não existe
+      return field.name === 'pipelineId';
+    });
     return (
       <Wrap label={field.label}>
-        <select value={(value as string) ?? ''} onChange={(e) => setValue(e.target.value)} style={input(t)}>
+        <select
+          value={(value as string) ?? ''}
+          onChange={(e) => {
+            const next = e.target.value;
+            const changes: Record<string, unknown> = { [field.name]: next };
+            if (next !== value) {
+              for (const sf of dependentStages) changes[sf] = '';
+            }
+            setMany(changes);
+          }}
+          style={input(t)}
+        >
           <option value="">{field.required ? '— escolha —' : '— qualquer funil —'}</option>
           {(pipelines.data ?? []).map((p) => (
             <option key={p.id} value={p.id}>
