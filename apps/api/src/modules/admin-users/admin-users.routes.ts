@@ -5,7 +5,9 @@ import {
   AdminUsersError,
   createAdminUser,
   listAdminUsers,
+  listUserConnections,
   resetAdminUserPassword,
+  setUserConnections,
   updateAdminUser,
 } from './admin-users.service.js';
 
@@ -45,6 +47,10 @@ const resetPasswordSchema = z.object({
   password: z.string().min(8, 'Senha deve ter no mínimo 8 caracteres'),
 });
 
+const setConnectionsSchema = z.object({
+  connectionIds: z.array(z.string().min(1)).default([]),
+});
+
 const idParam = z.object({ id: z.string().min(1) });
 
 export const adminUsersRoutes: FastifyPluginAsync = async (app) => {
@@ -80,6 +86,33 @@ export const adminUsersRoutes: FastifyPluginAsync = async (app) => {
     }
     try {
       return reply.send(await updateAdminUser(req.user!.id, params.data.id, body.data));
+    } catch (e) {
+      return send(reply, e);
+    }
+  });
+
+  app.get('/:id/connections', async (req, reply) => {
+    if (!requireAdmin(reply, req.user!.role)) return;
+    const params = idParam.safeParse(req.params);
+    if (!params.success) return reply.code(400).send({ error: 'VALIDATION', message: 'ID inválido' });
+    try {
+      return reply.send(await listUserConnections(params.data.id));
+    } catch (e) {
+      return send(reply, e);
+    }
+  });
+
+  app.put('/:id/connections', async (req, reply) => {
+    if (!requireAdmin(reply, req.user!.role)) return;
+    const params = idParam.safeParse(req.params);
+    if (!params.success) return reply.code(400).send({ error: 'VALIDATION', message: 'ID inválido' });
+    const body = setConnectionsSchema.safeParse(req.body);
+    if (!body.success) {
+      const first = body.error.errors[0]?.message ?? 'Dados inválidos';
+      return reply.code(400).send({ error: 'VALIDATION', message: first });
+    }
+    try {
+      return reply.send(await setUserConnections(params.data.id, body.data.connectionIds));
     } catch (e) {
       return send(reply, e);
     }

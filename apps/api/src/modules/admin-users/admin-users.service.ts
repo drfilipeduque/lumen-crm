@@ -165,6 +165,71 @@ export async function updateAdminUser(
   return toDTO(updated);
 }
 
+// =====================================================================
+// CONEXÕES VINCULADAS AO USUÁRIO
+// =====================================================================
+
+export type AssignedConnection = {
+  id: string;
+  name: string;
+  type: 'OFFICIAL' | 'UNOFFICIAL';
+  active: boolean;
+  status: string;
+  phone: string | null;
+};
+
+export async function listUserConnections(userId: string): Promise<AssignedConnection[]> {
+  const target = await prisma.user.findUnique({ where: { id: userId }, select: { id: true } });
+  if (!target) throw new AdminUsersError('NOT_FOUND', 'Usuário não encontrado', 404);
+  const links = await prisma.userWhatsAppConnection.findMany({
+    where: { userId },
+    select: {
+      connection: {
+        select: { id: true, name: true, type: true, active: true, status: true, phone: true },
+      },
+    },
+  });
+  return links.map((l) => ({
+    id: l.connection.id,
+    name: l.connection.name,
+    type: l.connection.type,
+    active: l.connection.active,
+    status: l.connection.status,
+    phone: l.connection.phone,
+  }));
+}
+
+export async function setUserConnections(
+  userId: string,
+  connectionIds: string[],
+): Promise<{ ok: true; assigned: number }> {
+  const target = await prisma.user.findUnique({ where: { id: userId }, select: { id: true } });
+  if (!target) throw new AdminUsersError('NOT_FOUND', 'Usuário não encontrado', 404);
+
+  // Valida se todas as conexões existem (evita criar links órfãos via race).
+  const ids = Array.from(new Set(connectionIds));
+  if (ids.length > 0) {
+    const found = await prisma.whatsAppConnection.count({ where: { id: { in: ids } } });
+    if (found !== ids.length) {
+      throw new AdminUsersError('INVALID_CONNECTION', 'Uma ou mais conexões não existem', 400);
+    }
+  }
+
+  await prisma.$transaction([
+    prisma.userWhatsAppConnection.deleteMany({ where: { userId } }),
+    ...(ids.length > 0
+      ? [
+          prisma.userWhatsAppConnection.createMany({
+            data: ids.map((connectionId) => ({ userId, connectionId })),
+            skipDuplicates: true,
+          }),
+        ]
+      : []),
+  ]);
+
+  return { ok: true, assigned: ids.length };
+}
+
 export async function resetAdminUserPassword(
   actorId: string,
   id: string,
