@@ -4,9 +4,9 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "tsx watch src/server.ts",
+    "dev": "TZ=America/Sao_Paulo tsx watch src/server.ts",
     "build": "tsc",
-    "start": "node dist/server.js",
+    "start": "TZ=America/Sao_Paulo node dist/server.js",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src"
   },

@@ -11,6 +11,12 @@ if (existsSync(envPath)) {
   loadEnv({ path: envPath });
 }
 
+// TZ DA APLICAÇÃO — todas as datas (setHours, getHours, getDay, presets de
+// lembrete, períodos, business hours, etc.) operam em horário de Brasília.
+// Setado aqui cedo pra valer em qualquer Date criado depois deste import.
+// Defaultamos pra America/Sao_Paulo se a env TZ não foi setada externamente.
+if (!process.env.TZ) process.env.TZ = 'America/Sao_Paulo';
+
 const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   API_HOST: z.string().default('0.0.0.0'),

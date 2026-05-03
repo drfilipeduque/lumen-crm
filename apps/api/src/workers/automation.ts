@@ -202,12 +202,12 @@ async function runCronTick(_kind: string, log: FastifyBaseLogger) {
           const hour = Number(cfg.hour ?? -1);
           const minute = Number(cfg.minute ?? -1);
           const dow = cfg.dayOfWeek as number | undefined;
-          // BRT (UTC-3) — alinha com regra usada em condition-evaluator.
-          const local = new Date(now.getTime() - 3 * 3_600_000);
+          // Process.env.TZ=America/Sao_Paulo (setado em env.ts) garante que
+          // getHours/getMinutes/getDay já retornam horário de Brasília.
           const ok =
-            local.getUTCHours() === hour &&
-            local.getUTCMinutes() === minute &&
-            (dow === undefined || local.getUTCDay() === dow);
+            now.getHours() === hour &&
+            now.getMinutes() === minute &&
+            (dow === undefined || now.getDay() === dow);
           if (!ok) continue;
           await fireDirect(a.id, 'cron:scheduled', {
             type: 'scheduled' as never,

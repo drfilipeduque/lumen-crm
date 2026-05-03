@@ -23,10 +23,12 @@ function asArray<T>(v: unknown): T[] {
   return Array.isArray(v) ? (v as T[]) : [];
 }
 
-// Brasília: business hours 9h-18h, seg-sex (TZ-aware via ENV poderia ajustar).
+// Brasília: business hours 9h-18h, seg-sex.
+// TZ=America/Sao_Paulo é setada no boot (env.ts), então getDay/getHours
+// já refletem o horário local correto.
 function isBusinessHours(d: Date): boolean {
-  const day = d.getUTCDay(); // 0=Dom, 6=Sab — TZ negociada com cliente; usamos UTC do servidor.
-  const hour = d.getUTCHours() - 3; // BRT (sem horário de verão atual)
+  const day = d.getDay(); // 0=Dom, 6=Sab
+  const hour = d.getHours();
   return day >= 1 && day <= 5 && hour >= 9 && hour < 18;
 }
 
