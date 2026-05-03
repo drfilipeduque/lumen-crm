@@ -11,9 +11,12 @@ import {
   useAdminUsers,
   useCreateAdminUser,
   useResetAdminUserPassword,
+  useSetUserConnections,
   useUpdateAdminUser,
+  useUserConnections,
   type AdminUser,
 } from '../../hooks/useAdminUsers';
+import { useWhatsAppConnections } from '../../hooks/useWhatsApp';
 
 const ROLE_LABEL: Record<AdminUser['role'], string> = {
   ADMIN: 'Administrador',
@@ -38,6 +41,7 @@ export function SettingsUsers() {
   const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState<AdminUser | null>(null);
   const [resetting, setResetting] = useState<AdminUser | null>(null);
+  const [managingConnections, setManagingConnections] = useState<AdminUser | null>(null);
   const [confirmActive, setConfirmActive] = useState<{ user: AdminUser; activate: boolean } | null>(null);
 
   const update = useUpdateAdminUser();
@@ -144,6 +148,14 @@ export function SettingsUsers() {
                         </button>
                         <button
                           type="button"
+                          title="Conexões WhatsApp"
+                          onClick={() => setManagingConnections(u)}
+                          style={iconBtn(t)}
+                        >
+                          <Icons.Phone s={12} c={t.textDim} />
+                        </button>
+                        <button
+                          type="button"
                           title="Resetar senha"
                           onClick={() => setResetting(u)}
                           style={iconBtn(t)}
@@ -184,6 +196,13 @@ export function SettingsUsers() {
 
       {resetting && (
         <ResetPasswordModal user={resetting} onClose={() => setResetting(null)} />
+      )}
+
+      {managingConnections && (
+        <ConnectionsModal
+          user={managingConnections}
+          onClose={() => setManagingConnections(null)}
+        />
       )}
 
       {confirmActive && (
@@ -376,6 +395,167 @@ function ResetPasswordModal({ user, onClose }: { user: AdminUser; onClose: () =>
         </div>
       </div>
     </Modal>
+  );
+}
+
+function ConnectionsModal({ user, onClose }: { user: AdminUser; onClose: () => void }) {
+  const { tokens: t } = useTheme();
+  const allConnections = useWhatsAppConnections();
+  const assigned = useUserConnections(user.id);
+  const setConnections = useSetUserConnections();
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [initialized, setInitialized] = useState(false);
+
+  useEffect(() => {
+    if (!initialized && assigned.data) {
+      setSelected(new Set(assigned.data.map((c) => c.id)));
+      setInitialized(true);
+    }
+  }, [assigned.data, initialized]);
+
+  const toggle = (id: string) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const submit = async () => {
+    try {
+      await setConnections.mutateAsync({ userId: user.id, connectionIds: Array.from(selected) });
+      toast(`Conexões atualizadas (${selected.size})`, 'success');
+      onClose();
+    } catch (e) {
+      toast(axiosMsg(e) || 'Falha ao salvar', 'error');
+    }
+  };
+
+  const list = allConnections.data ?? [];
+  const official = list.filter((c) => c.type === 'OFFICIAL');
+  const unofficial = list.filter((c) => c.type === 'UNOFFICIAL');
+
+  return (
+    <Modal open onClose={onClose} title={`Conexões — ${user.name}`} width={520}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <div style={{ fontSize: 12, color: t.textDim, lineHeight: 1.5 }}>
+          Marque as conexões WhatsApp que esse usuário pode usar pra enviar e receber mensagens.
+          Sem nenhuma conexão marcada, ele não vê conversas. Admins enxergam tudo independente.
+        </div>
+
+        {allConnections.isLoading ? (
+          <div style={{ fontSize: 12, color: t.textDim, padding: 16 }}>Carregando…</div>
+        ) : list.length === 0 ? (
+          <div style={{
+            border: `1px dashed ${t.border}`, borderRadius: 8,
+            padding: 24, textAlign: 'center', fontSize: 12.5, color: t.textDim,
+          }}>
+            Nenhuma conexão cadastrada. Cadastre em /whatsapp primeiro.
+          </div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14, maxHeight: 380, overflowY: 'auto' }}>
+            {official.length > 0 && (
+              <ConnectionGroup
+                t={t}
+                title="API Oficial (Meta)"
+                accent="#D4AF37"
+                connections={official}
+                selected={selected}
+                onToggle={toggle}
+              />
+            )}
+            {unofficial.length > 0 && (
+              <ConnectionGroup
+                t={t}
+                title="Não Oficial (Baileys)"
+                accent="#94a3b8"
+                connections={unofficial}
+                selected={selected}
+                onToggle={toggle}
+              />
+            )}
+          </div>
+        )}
+
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 6 }}>
+          <span style={{ fontSize: 11.5, color: t.textDim }}>
+            {selected.size} de {list.length} marcada{selected.size === 1 ? '' : 's'}
+          </span>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button type="button" onClick={onClose} style={buttonGhost(t)}>Cancelar</button>
+            <button
+              type="button"
+              onClick={submit}
+              disabled={setConnections.isPending || !initialized}
+              style={buttonGold(t)}
+            >
+              {setConnections.isPending ? 'Salvando…' : 'Salvar'}
+            </button>
+          </div>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+function ConnectionGroup({
+  t,
+  title,
+  accent,
+  connections,
+  selected,
+  onToggle,
+}: {
+  t: ReturnType<typeof useTheme>['tokens'];
+  title: string;
+  accent: string;
+  connections: { id: string; name: string; phone: string | null; status: string; active: boolean }[];
+  selected: Set<string>;
+  onToggle: (id: string) => void;
+}) {
+  return (
+    <div>
+      <div style={{
+        fontSize: 10.5, fontWeight: 700, color: accent,
+        textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 6,
+      }}>
+        {title}
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+        {connections.map((c) => {
+          const checked = selected.has(c.id);
+          return (
+            <label
+              key={c.id}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 10,
+                padding: '8px 10px', borderRadius: 7,
+                background: checked ? `${accent}14` : 'transparent',
+                border: `1px solid ${checked ? `${accent}66` : t.border}`,
+                cursor: 'pointer',
+              }}
+            >
+              <input
+                type="checkbox"
+                checked={checked}
+                onChange={() => onToggle(c.id)}
+                style={{ accentColor: accent, margin: 0 }}
+              />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 12.5, color: t.text, fontWeight: 500 }}>
+                  {c.name}
+                </div>
+                <div style={{ fontSize: 11, color: t.textDim, marginTop: 2 }}>
+                  {c.phone ?? 'sem número'} · {c.status}
+                  {!c.active && ' · INATIVA'}
+                </div>
+              </div>
+            </label>
+          );
+        })}
+      </div>
+    </div>
   );
 }
 

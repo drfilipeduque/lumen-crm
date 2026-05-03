@@ -68,3 +68,37 @@ export function useResetAdminUserPassword() {
       (await api.post<{ ok: true }>(`/admin/users/${id}/reset-password`, { password })).data,
   });
 }
+
+export type AssignedConnection = {
+  id: string;
+  name: string;
+  type: 'OFFICIAL' | 'UNOFFICIAL';
+  active: boolean;
+  status: string;
+  phone: string | null;
+};
+
+export function useUserConnections(userId: string | null) {
+  return useQuery({
+    queryKey: ['admin-user-connections', userId],
+    queryFn: async () =>
+      (await api.get<AssignedConnection[]>(`/admin/users/${userId}/connections`)).data,
+    enabled: !!userId,
+  });
+}
+
+export function useSetUserConnections() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ userId, connectionIds }: { userId: string; connectionIds: string[] }) =>
+      (
+        await api.put<{ ok: true; assigned: number }>(`/admin/users/${userId}/connections`, {
+          connectionIds,
+        })
+      ).data,
+    onSuccess: (_, vars) => {
+      qc.invalidateQueries({ queryKey: ['admin-user-connections', vars.userId] });
+      qc.invalidateQueries({ queryKey: ['whatsapp-connections'] });
+    },
+  });
+}
