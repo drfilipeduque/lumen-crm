@@ -20,6 +20,14 @@ export function NotificationBell() {
   const markSeen = useMarkSeen();
   const markAllSeen = useMarkAllSeen();
   const [open, setOpen] = useState(false);
+
+  // Refetch imediato ao abrir o popover pra mostrar o estado mais atual.
+  useEffect(() => {
+    if (open) {
+      void notifications.refetch();
+      void pending.refetch();
+    }
+  }, [open]);
   const wrapRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
   const popoverRef = useRef<HTMLDivElement>(null);

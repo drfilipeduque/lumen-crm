@@ -4,7 +4,8 @@ import { useSocketEvent, useSocketIO } from '../hooks/useSocketIO';
 import { useAuthStore } from '../stores/useAuthStore';
 import { toast } from './ui/Toast';
 
-type ReminderDuePayload = { id: string; title: string; opportunityId: string };
+type ReminderOverduePayload = { id: string; title: string; opportunityId: string };
+type ReminderCreatedPayload = { id: string; title: string; opportunityId: string; dueAt: string };
 type WAConnectionUpdate = { connectionId: string; status: string; qr?: string; phone?: string | null };
 type MessageNew = { conversationId: string; messageId: string; contactId: string; fromMe?: boolean };
 type MessageStatus = {
@@ -95,7 +96,23 @@ export function RealtimeListener() {
     qc.invalidateQueries({ queryKey: ['conversation-detail', payload.conversationId] });
   });
 
-  useSocketEvent<ReminderDuePayload>('reminder:due', (payload) => {
+  useSocketEvent<ReminderCreatedPayload>('reminder:created', (payload) => {
+    qc.invalidateQueries({ queryKey: ['reminders-pending-count'] });
+    qc.invalidateQueries({ queryKey: ['reminders-notifications'] });
+    qc.invalidateQueries({ queryKey: ['reminders-global'] });
+    qc.invalidateQueries({ queryKey: ['opportunity-reminders', payload.opportunityId] });
+
+    toast(`📌 Novo lembrete: ${payload.title}`, 'info');
+
+    const prefs = (user?.preferences ?? {}) as { notifications?: { sound?: boolean; desktop?: boolean } };
+    const notif = prefs.notifications ?? {};
+    if (notif.sound !== false) playBeep();
+    if (notif.desktop !== false) showDesktopNotification('Novo lembrete Lumen', payload.title);
+  });
+
+  useSocketEvent<ReminderOverduePayload>('reminder:overdue', (payload) => {
+    // Esse aqui sim usa dedupe por id — worker pode disparar várias vezes se
+    // o cron rodar antes do nosso updateMany propagar.
     if (lastShownRef.current.has(payload.id)) return;
     lastShownRef.current.add(payload.id);
 
@@ -104,12 +121,12 @@ export function RealtimeListener() {
     qc.invalidateQueries({ queryKey: ['reminders-global'] });
     qc.invalidateQueries({ queryKey: ['opportunity-reminders', payload.opportunityId] });
 
-    toast(`🔔 Lembrete: ${payload.title}`, 'info');
+    toast(`🔔 Lembrete venceu: ${payload.title}`, 'info');
 
     const prefs = (user?.preferences ?? {}) as { notifications?: { sound?: boolean; desktop?: boolean } };
     const notif = prefs.notifications ?? {};
     if (notif.sound !== false) playBeep();
-    if (notif.desktop !== false) showDesktopNotification('Lembrete Lumen', payload.title);
+    if (notif.desktop !== false) showDesktopNotification('Lembrete vencido — Lumen', payload.title);
   });
 
   return null;
