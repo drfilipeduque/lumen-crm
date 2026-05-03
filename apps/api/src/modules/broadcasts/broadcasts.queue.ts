@@ -19,7 +19,8 @@ export const broadcastSendQueue = new Queue<BroadcastSendJob>(QUEUE_BROADCAST_SE
   },
 });
 
-const jobIdFor = (id: string) => `bcast-recipient:${id}`;
+// BullMQ 5.74+ proíbe ':' em jobId custom. Usamos '__' como separador.
+const jobIdFor = (id: string) => `bcast-recipient__${id}`;
 
 export async function enqueueRecipient(recipientId: string, delayMs: number): Promise<void> {
   await broadcastSendQueue.add(

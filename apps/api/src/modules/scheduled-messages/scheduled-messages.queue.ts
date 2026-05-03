@@ -19,7 +19,8 @@ export const scheduledMessageQueue = new Queue<ScheduledMessageJob>(QUEUE_SCHEDU
   },
 });
 
-const jobIdFor = (id: string) => `scheduled-message:${id}`;
+// BullMQ 5.74+ proíbe ':' em jobId custom. Usamos '__' como separador.
+const jobIdFor = (id: string) => `scheduled-message__${id}`;
 
 export async function enqueueScheduledMessage(id: string, runAt: Date): Promise<void> {
   const delay = Math.max(0, runAt.getTime() - Date.now());
