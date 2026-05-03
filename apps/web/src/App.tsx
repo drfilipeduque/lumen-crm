@@ -13,8 +13,8 @@ import { PagePlaceholder } from './pages/PagePlaceholder';
 import { AutomationsPage } from './pages/Automations';
 import { FlowBuilder } from './pages/Automations/FlowBuilder';
 import { SettingsLayout } from './pages/settings/SettingsLayout';
-import { SettingsSection } from './pages/settings/SettingsSection';
 import { SettingsAccount } from './pages/settings/SettingsAccount';
+import { SettingsUsers } from './pages/settings/SettingsUsers';
 import { SettingsAppearance } from './pages/settings/SettingsAppearance';
 import { SettingsTags } from './pages/settings/SettingsTags';
 import { SettingsCustomFields } from './pages/settings/SettingsCustomFields';
@@ -69,10 +69,7 @@ export function App() {
                   path="users"
                   element={
                     <ProtectedRoute roles={['ADMIN']}>
-                      <SettingsSection
-                        title="Usuários"
-                        description="Gerencie a equipe que tem acesso ao Lumen CRM."
-                      />
+                      <SettingsUsers />
                     </ProtectedRoute>
                   }
                 />
