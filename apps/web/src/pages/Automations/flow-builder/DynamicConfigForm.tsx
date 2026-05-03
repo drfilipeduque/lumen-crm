@@ -87,6 +87,7 @@ export function DynamicConfigForm({
   triggerSubtype: string | null;
   previousStepCount: number;
 }) {
+  const fieldNames = fields.map((f) => f.name);
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
       {fields.map((f) => (
@@ -95,6 +96,7 @@ export function DynamicConfigForm({
           field={f}
           value={config[f.name]}
           allConfig={config}
+          fieldNames={fieldNames}
           setValue={(v) => onChange({ ...config, [f.name]: v })}
           triggerSubtype={triggerSubtype}
           previousStepCount={previousStepCount}
@@ -111,6 +113,7 @@ function FieldRow({
   field,
   value,
   allConfig,
+  fieldNames,
   setValue,
   triggerSubtype,
   previousStepCount,
@@ -118,6 +121,7 @@ function FieldRow({
   field: ConfigField;
   value: unknown;
   allConfig: Record<string, unknown>;
+  fieldNames: string[];
   setValue: (v: unknown) => void;
   triggerSubtype: string | null;
   previousStepCount: number;
@@ -132,7 +136,16 @@ function FieldRow({
   const customFields = useCustomFields();
 
   // Cascade: se for um campo de stage, descobre o pipeline associado.
-  const linkedPipelineField = STAGE_TO_PIPELINE[field.name];
+  // Se o campo linkado (ex.: fromPipelineId) não existe nos fields desse trigger,
+  // cai pro pipelineId genérico — caso de opportunity_stage_changed, que tem um
+  // pipelineId só + fromStageId/toStageId.
+  const linkedPipelineFieldRaw = STAGE_TO_PIPELINE[field.name];
+  const linkedPipelineField =
+    linkedPipelineFieldRaw && fieldNames.includes(linkedPipelineFieldRaw)
+      ? linkedPipelineFieldRaw
+      : fieldNames.includes('pipelineId')
+        ? 'pipelineId'
+        : null;
   const linkedPipelineId = linkedPipelineField
     ? ((allConfig[linkedPipelineField] as string | undefined) ?? '')
     : '';
