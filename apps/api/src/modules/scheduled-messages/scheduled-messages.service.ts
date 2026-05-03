@@ -98,7 +98,15 @@ export async function createScheduledMessage(actor: Actor, input: CreateSchedule
       createdById: actor.id,
     },
   });
-  await enqueueScheduledMessage(created.id, scheduledAt);
+  // Se o enqueue falhar (Redis indisponível, etc.), removemos a row pra não
+  // ficar fantasma — sem job, ela nunca dispararia.
+  try {
+    await enqueueScheduledMessage(created.id, scheduledAt);
+  } catch (err) {
+    await prisma.scheduledMessage.delete({ where: { id: created.id } }).catch(() => {});
+    const msg = err instanceof Error ? err.message : 'fila indisponível';
+    throw new ScheduledMessageError('ENQUEUE_FAILED', `Falha ao enfileirar: ${msg}`, 503);
+  }
   return created;
 }
 
