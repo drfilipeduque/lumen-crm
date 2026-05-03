@@ -7,6 +7,7 @@ import { useTheme } from '../../../lib/ThemeContext';
 import { Modal } from '../../../components/ui/Modal';
 import { toast } from '../../../components/ui/Toast';
 import { useTestAutomation } from '../../../hooks/useAutomations';
+import { useSearchOpportunities, type OpportunitySearchHit } from '../../../hooks/useOpportunities';
 import { TRIGGER_CATEGORIES, ACTION_CATEGORIES, CONDITION_CATEGORIES, findItem } from './sections';
 
 function labelFor(type: 'trigger' | 'condition' | 'action', subtype: string): string {
@@ -25,16 +26,16 @@ export function DryRunModal({
 }) {
   const { tokens: t } = useTheme();
   const test = useTestAutomation();
-  const [opportunityId, setOpportunityId] = useState('');
+  const [picked, setPicked] = useState<OpportunitySearchHit | null>(null);
   const [customJson, setCustomJson] = useState('{\n  "data": {}\n}');
   const [mode, setMode] = useState<'opportunity' | 'custom'>('opportunity');
 
   const fire = async () => {
     let event: { type: string; data?: Record<string, unknown> } | undefined;
-    if (mode === 'opportunity' && opportunityId) {
+    if (mode === 'opportunity' && picked) {
       event = {
         type: triggerType.startsWith('message_') ? 'message.received' : 'opportunity.stage_changed',
-        data: { opportunityId },
+        data: { opportunityId: picked.id },
       };
     } else if (mode === 'custom') {
       try {
@@ -75,13 +76,7 @@ export function DryRunModal({
         </div>
 
         {mode === 'opportunity' ? (
-          <input
-            type="text"
-            value={opportunityId}
-            onChange={(e) => setOpportunityId(e.target.value)}
-            placeholder="ID da oportunidade"
-            style={input(t)}
-          />
+          <OpportunityPicker picked={picked} onPick={setPicked} />
         ) : (
           <textarea
             value={customJson}
@@ -140,6 +135,132 @@ export function DryRunModal({
         </div>
       </div>
     </Modal>
+  );
+}
+
+function OpportunityPicker({
+  picked,
+  onPick,
+}: {
+  picked: OpportunitySearchHit | null;
+  onPick: (o: OpportunitySearchHit | null) => void;
+}) {
+  const { tokens: t } = useTheme();
+  const [search, setSearch] = useState('');
+  const [open, setOpen] = useState(false);
+  const list = useSearchOpportunities(search);
+
+  if (picked) {
+    return (
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: 8,
+          padding: '9px 12px',
+          background: t.bgInput,
+          border: `1px solid ${t.border}`,
+          borderRadius: 8,
+        }}
+      >
+        <div style={{ minWidth: 0, flex: 1 }}>
+          <div style={{ fontSize: 13, color: t.text, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {picked.title}
+          </div>
+          <div style={{ fontSize: 11, color: t.textDim, marginTop: 2 }}>
+            {picked.contactName} · {picked.pipelineName} → {picked.stageName}
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={() => {
+            onPick(null);
+            setSearch('');
+            setOpen(false);
+          }}
+          style={{
+            background: 'transparent',
+            border: 'none',
+            color: t.textDim,
+            cursor: 'pointer',
+            fontSize: 11,
+            padding: 4,
+          }}
+        >
+          Trocar
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ position: 'relative' }}>
+      <input
+        type="text"
+        value={search}
+        onChange={(e) => {
+          setSearch(e.target.value);
+          setOpen(true);
+        }}
+        onFocus={() => setOpen(true)}
+        placeholder="Buscar por nome da oportunidade ou contato…"
+        style={input(t)}
+      />
+      {open ? (
+        <div
+          style={{
+            position: 'absolute',
+            top: 'calc(100% + 4px)',
+            left: 0,
+            right: 0,
+            background: t.bgElevated,
+            border: `1px solid ${t.border}`,
+            borderRadius: 8,
+            maxHeight: 240,
+            overflow: 'auto',
+            zIndex: 10,
+            boxShadow: '0 6px 20px rgba(0,0,0,0.25)',
+          }}
+        >
+          {list.isLoading ? (
+            <div style={{ padding: 12, fontSize: 12, color: t.textDim }}>Carregando…</div>
+          ) : !list.data || list.data.length === 0 ? (
+            <div style={{ padding: 12, fontSize: 12, color: t.textDim }}>
+              {search.trim() ? 'Nenhum resultado.' : 'Comece a digitar pra buscar.'}
+            </div>
+          ) : (
+            list.data.map((o) => (
+              <button
+                key={o.id}
+                type="button"
+                onClick={() => {
+                  onPick(o);
+                  setOpen(false);
+                }}
+                style={{
+                  display: 'block',
+                  width: '100%',
+                  textAlign: 'left',
+                  background: 'transparent',
+                  border: 'none',
+                  padding: '8px 12px',
+                  cursor: 'pointer',
+                  borderBottom: `1px solid ${t.border}`,
+                }}
+                onMouseEnter={(e) => (e.currentTarget.style.background = t.bgInput)}
+                onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+              >
+                <div style={{ fontSize: 12.5, color: t.text, fontWeight: 600 }}>{o.title}</div>
+                <div style={{ fontSize: 11, color: t.textDim, marginTop: 2 }}>
+                  {o.contactName} · {o.pipelineName} → {o.stageName}
+                </div>
+              </button>
+            ))
+          )}
+        </div>
+      ) : null}
+    </div>
   );
 }
 
