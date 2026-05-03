@@ -131,6 +131,27 @@ export function useValidateFlow() {
   });
 }
 
+export type AutomationMediaUpload = {
+  url: string;
+  name: string;
+  mimeType: string;
+  size: number;
+  type: 'IMAGE' | 'AUDIO' | 'VIDEO' | 'DOCUMENT';
+};
+
+export function useUploadAutomationMedia() {
+  return useMutation({
+    mutationFn: async (file: File) => {
+      const fd = new FormData();
+      fd.append('file', file);
+      const r = await api.post<AutomationMediaUpload>('/automation-uploads/media', fd, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+      return r.data;
+    },
+  });
+}
+
 export function useTestAutomation() {
   return useMutation({
     mutationFn: async ({ id, event }: { id: string; event?: { type: string; data?: Record<string, unknown> } }) =>
