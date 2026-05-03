@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../../lib/ThemeContext';
 import { Icons } from '../icons';
@@ -19,12 +20,37 @@ export function NotificationBell() {
   const markSeen = useMarkSeen();
   const markAllSeen = useMarkAllSeen();
   const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const popoverRef = useRef<HTMLDivElement>(null);
+  const [pos, setPos] = useState<{ top: number; right: number } | null>(null);
+
+  // Recalcula posição do popover (fixed) a partir do botão. Renderizamos via
+  // portal pra escapar do stacking context do Header (que tem z-index baixo
+  // intencionalmente, pra modais ficarem por cima).
+  useLayoutEffect(() => {
+    if (!open) return;
+    const update = () => {
+      const rect = buttonRef.current?.getBoundingClientRect();
+      if (!rect) return;
+      setPos({ top: rect.bottom + 6, right: window.innerWidth - rect.right });
+    };
+    update();
+    window.addEventListener('scroll', update, true);
+    window.addEventListener('resize', update);
+    return () => {
+      window.removeEventListener('scroll', update, true);
+      window.removeEventListener('resize', update);
+    };
+  }, [open]);
 
   useEffect(() => {
     if (!open) return;
     const handler = (e: MouseEvent) => {
-      if (!ref.current?.contains(e.target as Node)) setOpen(false);
+      const target = e.target as Node;
+      if (wrapRef.current?.contains(target)) return;
+      if (popoverRef.current?.contains(target)) return;
+      setOpen(false);
     };
     const id = setTimeout(() => document.addEventListener('mousedown', handler), 0);
     return () => {
@@ -49,8 +75,9 @@ export function NotificationBell() {
   };
 
   return (
-    <div ref={ref} style={{ position: 'relative' }}>
+    <div ref={wrapRef} style={{ position: 'relative' }}>
       <button
+        ref={buttonRef}
         onClick={() => setOpen((v) => !v)}
         title="Notificações"
         style={{
@@ -99,12 +126,14 @@ export function NotificationBell() {
         )}
       </button>
 
-      {open && (
+      {open && pos &&
+        createPortal(
         <div
+          ref={popoverRef}
           style={{
-            position: 'absolute',
-            top: 38,
-            right: 0,
+            position: 'fixed',
+            top: pos.top,
+            right: pos.right,
             width: 400,
             maxHeight: 500,
             background: t.bgElevated,
@@ -113,7 +142,7 @@ export function NotificationBell() {
             boxShadow: '0 14px 40px rgba(0,0,0,0.3)',
             display: 'flex',
             flexDirection: 'column',
-            zIndex: 60,
+            zIndex: 1000,
             overflow: 'hidden',
           }}
         >
@@ -203,7 +232,8 @@ export function NotificationBell() {
               Ver todos os lembretes
             </button>
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
     </div>
   );
