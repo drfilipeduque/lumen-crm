@@ -8,7 +8,7 @@ import { Switch } from '../../components/ui/Switch';
 import { toast } from '../../components/ui/Toast';
 import { FONT_STACK } from '../../lib/theme';
 
-const MAX_AVATAR_BYTES = 2 * 1024 * 1024;
+const MAX_AVATAR_BYTES = 8 * 1024 * 1024;
 
 function initialsOf(name: string): string {
   const parts = name.trim().split(/\s+/).filter(Boolean);
@@ -85,7 +85,7 @@ function ProfileSection() {
       return;
     }
     if (file.size > MAX_AVATAR_BYTES) {
-      toast('Arquivo excede 2MB', 'error');
+      toast('Arquivo excede 8MB', 'error');
       return;
     }
     if (previewUrl) URL.revokeObjectURL(previewUrl);
@@ -203,7 +203,9 @@ function ProfileSection() {
               Alterar foto
             </button>
           )}
-          <div style={{ fontSize: 10.5, color: t.textFaint }}>JPG, PNG ou WEBP · até 2MB</div>
+          <div style={{ fontSize: 10.5, color: t.textFaint }}>
+            JPG, PNG ou WEBP · até 8MB · será otimizada automaticamente
+          </div>
         </div>
 
         <div style={{ flex: 1, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>

@@ -1,6 +1,7 @@
 import { mkdir, writeFile } from 'node:fs/promises';
-import { resolve, extname } from 'node:path';
+import { resolve } from 'node:path';
 import { randomBytes } from 'node:crypto';
+import sharp from 'sharp';
 import type { FastifyPluginAsync } from 'fastify';
 import {
   changePasswordSchema,
@@ -24,13 +25,12 @@ import { authenticate } from './auth.middleware.js';
 import { UPLOADS_DIR } from '../../lib/uploads.js';
 
 const ALLOWED_MIME = new Set(['image/jpeg', 'image/png', 'image/webp']);
-const MAX_AVATAR_BYTES = 2 * 1024 * 1024;
-
-const EXT_BY_MIME: Record<string, string> = {
-  'image/jpeg': '.jpg',
-  'image/png': '.png',
-  'image/webp': '.webp',
-};
+// Limite generoso na entrada — comprimimos server-side antes de salvar.
+// Foto de celular comum cabe (~3-6MB), com folga.
+const MAX_AVATAR_BYTES = 8 * 1024 * 1024;
+// Tamanho final do avatar processado.
+const AVATAR_SIZE = 512;
+const AVATAR_QUALITY = 85;
 
 export const authRoutes: FastifyPluginAsync = async (app) => {
   app.post('/login', async (req, reply) => {
@@ -127,7 +127,7 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
     } catch (e) {
       const msg = e instanceof Error ? e.message : '';
       if (msg.includes('FST_REQ_FILE_TOO_LARGE') || msg.toLowerCase().includes('too large')) {
-        return reply.code(413).send({ error: 'FILE_TOO_LARGE', message: 'Arquivo excede 2MB' });
+        return reply.code(413).send({ error: 'FILE_TOO_LARGE', message: 'Arquivo excede 8MB' });
       }
       throw e;
     }
@@ -136,9 +136,9 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
       return reply.code(415).send({ error: 'UNSUPPORTED_MEDIA', message: 'Use JPG, PNG ou WEBP' });
     }
 
-    let buffer: Buffer;
+    let raw: Buffer;
     try {
-      buffer = await file.toBuffer();
+      raw = await file.toBuffer();
     } catch (e) {
       const err = e as { code?: string; name?: string; message?: string };
       const isTooLarge =
@@ -146,19 +146,29 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
         err.name === 'RequestFileTooLargeError' ||
         (err.message ?? '').toLowerCase().includes('too large');
       if (isTooLarge) {
-        return reply.code(413).send({ error: 'FILE_TOO_LARGE', message: 'Arquivo excede 2MB' });
+        return reply.code(413).send({ error: 'FILE_TOO_LARGE', message: 'Arquivo excede 8MB' });
       }
       return reply.code(400).send({ error: 'INVALID_FILE', message: 'Falha ao ler arquivo' });
     }
-    if (buffer.byteLength > MAX_AVATAR_BYTES) {
-      return reply.code(413).send({ error: 'FILE_TOO_LARGE', message: 'Arquivo excede 2MB' });
+
+    // Pipeline com sharp: auto-rotaciona pelo EXIF, recorta no centro pra
+    // ficar quadrado, redimensiona pra AVATAR_SIZE px e salva como JPEG
+    // otimizado. Fica tipicamente 30-150KB independente da imagem original.
+    let optimized: Buffer;
+    try {
+      optimized = await sharp(raw)
+        .rotate()
+        .resize(AVATAR_SIZE, AVATAR_SIZE, { fit: 'cover', position: 'attention' })
+        .jpeg({ quality: AVATAR_QUALITY, mozjpeg: true })
+        .toBuffer();
+    } catch {
+      return reply.code(400).send({ error: 'INVALID_FILE', message: 'Imagem corrompida ou inválida' });
     }
 
-    const ext = EXT_BY_MIME[file.mimetype] ?? (extname(file.filename) || '.bin');
-    const name = `${req.user!.id}-${randomBytes(6).toString('hex')}${ext}`;
+    const name = `${req.user!.id}-${randomBytes(6).toString('hex')}.jpg`;
     const dir = resolve(UPLOADS_DIR, 'avatars');
     await mkdir(dir, { recursive: true });
-    await writeFile(resolve(dir, name), buffer);
+    await writeFile(resolve(dir, name), optimized);
 
     const url = `/uploads/avatars/${name}`;
     try {
