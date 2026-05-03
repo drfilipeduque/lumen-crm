@@ -21,7 +21,7 @@ export function startReminderWorker(log: FastifyBaseLogger) {
         select: { id: true, title: true, opportunityId: true, userId: true },
       });
       for (const r of details) {
-        emitToUser(r.userId, 'reminder:due', {
+        emitToUser(r.userId, 'reminder:overdue', {
           id: r.id,
           title: r.title,
           opportunityId: r.opportunityId,

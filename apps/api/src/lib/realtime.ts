@@ -37,7 +37,8 @@ export function initRealtime(app: FastifyInstance, allowedOrigins: string[]) {
 
 // Eventos previstos
 export type RealtimeEventMap = {
-  'reminder:due': { id: string; title: string; opportunityId: string };
+  'reminder:created': { id: string; title: string; opportunityId: string; dueAt: string };
+  'reminder:overdue': { id: string; title: string; opportunityId: string };
   'message:new': { conversationId: string; messageId: string; contactId: string; fromMe: boolean };
   'message:status': {
     conversationId: string;

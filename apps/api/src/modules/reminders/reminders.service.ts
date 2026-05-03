@@ -1,4 +1,5 @@
 import { prisma, type Prisma } from '../../lib/prisma.js';
+import { emitToUser } from '../../lib/realtime.js';
 
 export class ReminderError extends Error {
   status: number;
@@ -118,6 +119,8 @@ export async function createReminder(actor: Actor, opportunityId: string, input:
   if (Number.isNaN(due.getTime())) {
     throw new ReminderError('INVALID_DATE', 'Data inválida', 400);
   }
+  // notified=true já na criação pra esse lembrete aparecer na lista do sino
+  // imediatamente. seenAt fica null até o usuário marcar.
   const created = await prisma.reminder.create({
     data: {
       opportunityId,
@@ -125,6 +128,8 @@ export async function createReminder(actor: Actor, opportunityId: string, input:
       title: input.title,
       description: input.description ?? null,
       dueAt: due,
+      notified: true,
+      notifiedAt: new Date(),
     },
     include: { user: { select: { id: true, name: true } } },
   });
@@ -135,6 +140,13 @@ export async function createReminder(actor: Actor, opportunityId: string, input:
       userId: actor.id,
       metadata: { reminderId: created.id, title: created.title } as Prisma.InputJsonValue,
     },
+  });
+  // Notifica o usuário em tempo real (toast/som/desktop) sobre o novo lembrete.
+  emitToUser(created.userId, 'reminder:created', {
+    id: created.id,
+    title: created.title,
+    opportunityId: created.opportunityId,
+    dueAt: created.dueAt.toISOString(),
   });
   return toDTO(created);
 }
@@ -157,6 +169,8 @@ export async function updateReminder(actor: Actor, id: string, input: UpdateInpu
     const d = new Date(input.dueAt);
     if (Number.isNaN(d.getTime())) throw new ReminderError('INVALID_DATE', 'Data inválida', 400);
     data.dueAt = d;
+    // Se a nova data está no futuro, podemos realertar quando vencer.
+    if (d.getTime() > Date.now()) data.dueAlerted = false;
   }
   if (input.snoozedUntil !== undefined) {
     if (input.snoozedUntil === null) data.snoozedUntil = null;
@@ -164,6 +178,8 @@ export async function updateReminder(actor: Actor, id: string, input: UpdateInpu
       const d = new Date(input.snoozedUntil);
       if (Number.isNaN(d.getTime())) throw new ReminderError('INVALID_DATE', 'Data inválida', 400);
       data.snoozedUntil = d;
+      // Snooze pra futuro = quando expirar, alerta de novo.
+      if (d.getTime() > Date.now()) data.dueAlerted = false;
     }
   }
   if (input.completed !== undefined) {
@@ -206,9 +222,10 @@ export async function snoozeReminder(
   } else {
     throw new ReminderError('INVALID_INPUT', 'Informe until ou preset', 400);
   }
+  // Snooze é uma forma de "vi e adiei" — marca como visto e libera realerta.
   const updated = await prisma.reminder.update({
     where: { id },
-    data: { snoozedUntil: until },
+    data: { snoozedUntil: until, dueAlerted: false, seenAt: new Date() },
     include: { user: { select: { id: true, name: true } } },
   });
   return toDTO(updated);
@@ -323,16 +340,16 @@ function periodRange(period: 'today' | 'week' | 'month'): { gte: Date; lte: Date
 // PENDING COUNT (badge do sino)
 // ============================================================
 
+// Badge do sino: conta tudo que está "não visto" — inclui lembretes recém
+// criados (notified=true setado na criação) e os que venceram (worker reseta
+// seenAt=null quando dispara overdue).
 export async function pendingCount(actor: Actor): Promise<number> {
-  const now = new Date();
   return prisma.reminder.count({
     where: {
       userId: actor.id,
       completed: false,
-      OR: [
-        { snoozedUntil: { not: null, lte: now } },
-        { snoozedUntil: null, dueAt: { lte: now } },
-      ],
+      notified: true,
+      seenAt: null,
     },
   });
 }
@@ -382,10 +399,13 @@ export async function markAllSeen(actor: Actor): Promise<{ ok: true; affected: n
 
 export async function findDueAndNotify(): Promise<{ id: string; userId: string }[]> {
   const now = new Date();
+  // Lembretes que venceram e ainda não tiveram o alerta de vencimento
+  // disparado. notified=true já está setado desde a criação — aqui marcamos
+  // dueAlerted e resetamos seenAt pra a notificação reaparecer no sino.
   const due = await prisma.reminder.findMany({
     where: {
       completed: false,
-      notified: false,
+      dueAlerted: false,
       OR: [
         { snoozedUntil: { not: null, lte: now } },
         { snoozedUntil: null, dueAt: { lte: now } },
@@ -397,7 +417,7 @@ export async function findDueAndNotify(): Promise<{ id: string; userId: string }
   if (due.length === 0) return [];
   await prisma.reminder.updateMany({
     where: { id: { in: due.map((r) => r.id) } },
-    data: { notified: true, notifiedAt: now },
+    data: { notified: true, notifiedAt: now, dueAlerted: true, seenAt: null },
   });
   return due;
 }
