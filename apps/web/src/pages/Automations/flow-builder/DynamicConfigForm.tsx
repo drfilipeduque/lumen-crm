@@ -157,7 +157,7 @@ function FieldRow({
     return (
       <Wrap label={field.label}>
         <select value={(value as string) ?? ''} onChange={(e) => setValue(e.target.value)} style={input(t)}>
-          <option value="">— escolha —</option>
+          <option value="">{field.required ? '— escolha —' : '— qualquer funil —'}</option>
           {(pipelines.data ?? []).map((p) => (
             <option key={p.id} value={p.id}>
               {p.name}
@@ -171,6 +171,11 @@ function FieldRow({
   // Stage dropdown
   if (STAGE_FIELDS.includes(field.name) || field.type === 'stage') {
     const noPipeline = !linkedPipelineId;
+    const placeholder = noPipeline
+      ? '— selecione um funil primeiro —'
+      : field.required
+        ? '— escolha —'
+        : '— qualquer etapa —';
     return (
       <Wrap label={field.label}>
         <select
@@ -179,7 +184,7 @@ function FieldRow({
           disabled={noPipeline}
           style={{ ...input(t), opacity: noPipeline ? 0.5 : 1 }}
         >
-          <option value="">{noPipeline ? '— selecione um funil primeiro —' : '— escolha —'}</option>
+          <option value="">{placeholder}</option>
           {cascadeStages.map((s) => (
             <option key={s.id} value={s.id}>
               {s.name}
