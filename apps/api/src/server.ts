@@ -13,6 +13,7 @@ import { customFieldsRoutes } from './modules/custom-fields/custom-fields.routes
 import { pipelinesRoutes, stagesRoutes } from './modules/pipelines/pipelines.routes.js';
 import { contactsRoutes } from './modules/contacts/contacts.routes.js';
 import { teamRoutes } from './modules/team/team.routes.js';
+import { adminUsersRoutes } from './modules/admin-users/admin-users.routes.js';
 import { opportunitiesRoutes, opportunityBoardRoutes } from './modules/opportunities/opportunities.routes.js';
 import { filesRoutes, opportunityFilesRoutes } from './modules/files/files.routes.js';
 import { opportunityRemindersRoutes, remindersRoutes } from './modules/reminders/reminders.routes.js';
@@ -93,6 +94,7 @@ await app.register(pipelinesRoutes, { prefix: '/pipelines' });
 await app.register(stagesRoutes, { prefix: '/stages' });
 await app.register(contactsRoutes, { prefix: '/contacts' });
 await app.register(teamRoutes, { prefix: '/team' });
+await app.register(adminUsersRoutes, { prefix: '/admin/users' });
 await app.register(opportunitiesRoutes, { prefix: '/opportunities' });
 await app.register(opportunityBoardRoutes, { prefix: '/pipelines' });
 await app.register(opportunityFilesRoutes, { prefix: '/opportunities' });
