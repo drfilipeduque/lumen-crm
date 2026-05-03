@@ -88,8 +88,13 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     if (!accessToken) throw new Error('Sessão expirada');
     const form = new FormData();
     form.append('file', file);
+    // Sobrescreve o Content-Type default 'application/json' do httpRaw.
+    // Sem isso o axios mantém JSON e o Fastify rejeita o multipart.
     const { data } = await httpRaw.post<AuthUser>('/auth/me/avatar', form, {
-      headers: { Authorization: `Bearer ${accessToken}` },
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'multipart/form-data',
+      },
     });
     set({ user: data });
     return data;
