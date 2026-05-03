@@ -385,8 +385,11 @@ function ResetPasswordModal({ user, onClose }: { user: AdminUser; onClose: () =>
 
 function Avatar({ name, avatar, t }: { name: string; avatar: string | null; t: ReturnType<typeof useTheme>['tokens'] }) {
   const initials = name.trim().split(/\s+/).slice(0, 2).map((p) => p[0] ?? '').join('').toUpperCase();
-  if (avatar) {
-    return <img src={avatar} alt={name} style={{ width: 32, height: 32, borderRadius: '50%', objectFit: 'cover' }} />;
+  // Paths internos (/uploads/...) precisam do prefixo /api pro proxy do Vite.
+  // Externos (https://...) passam direto.
+  const src = avatar?.startsWith('/uploads/') ? `/api${avatar}` : avatar;
+  if (src) {
+    return <img src={src} alt={name} style={{ width: 32, height: 32, borderRadius: '50%', objectFit: 'cover' }} />;
   }
   return (
     <div style={{
