@@ -14,6 +14,7 @@
 // Enums por nome (matchType, direction, connectionType, customFieldStrategy,
 // connectionStrategy, preferredType, priority, target).
 
+import { useEffect } from 'react';
 import { useTheme } from '../../../lib/ThemeContext';
 import { usePipelines, usePipeline } from '../../../hooks/usePipelines';
 import { useTags } from '../../../hooks/useTags';
@@ -154,6 +155,26 @@ function FieldRow({
     : '';
   const cascadePipeline = usePipeline(linkedPipelineId || null);
   const cascadeStages = cascadePipeline.data?.stages ?? [];
+
+  // Auto-clear: se o valor salvo é uma etapa que não pertence ao funil atual
+  // (config stale de antes de trocar de funil, ou seed quebrado), limpa.
+  // O usuário não consegue ver/corrigir manualmente porque o dropdown só lista
+  // etapas do funil atual.
+  const isStageField = STAGE_FIELDS.includes(field.name) || field.type === 'stage';
+  const stageValue = typeof value === 'string' ? value : '';
+  const stageBelongsToPipeline =
+    !stageValue || cascadeStages.some((s) => s.id === stageValue);
+  useEffect(() => {
+    if (
+      isStageField &&
+      stageValue &&
+      linkedPipelineId &&
+      cascadePipeline.isSuccess &&
+      !stageBelongsToPipeline
+    ) {
+      setValue('');
+    }
+  }, [isStageField, stageValue, linkedPipelineId, cascadePipeline.isSuccess, stageBelongsToPipeline, setValue]);
 
   // Pipeline dropdown
   if (PIPELINE_FIELDS.includes(field.name) || field.type === 'pipeline') {
