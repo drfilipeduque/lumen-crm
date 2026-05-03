@@ -403,6 +403,9 @@ model Reminder {
   notified      Boolean   @default(false)
   notifiedAt    DateTime?
   seenAt        DateTime?
+  // True quando já alertamos que o lembrete venceu — evita realertar todo
+  // tick. Resetado quando dueAt muda pra futuro ou quando o snooze expira.
+  dueAlerted    Boolean   @default(false)
   opportunityId String
   userId        String
 
