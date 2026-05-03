@@ -85,6 +85,26 @@ export type OpportunityDetail = BoardCard & {
   updatedAt: string;
 };
 
+export type OpportunitySearchHit = {
+  id: string;
+  title: string;
+  contactName: string;
+  pipelineId: string;
+  pipelineName: string;
+  stageId: string;
+  stageName: string;
+};
+
+export function useSearchOpportunities(q: string) {
+  return useQuery({
+    queryKey: ['opportunities-search', q],
+    queryFn: async () =>
+      (await api.get<OpportunitySearchHit[]>(`/opportunities/search`, { params: { q, limit: 20 } })).data,
+    staleTime: 10_000,
+    placeholderData: keepPreviousData,
+  });
+}
+
 export function useOpportunity(id: string | null) {
   return useQuery({
     queryKey: id ? (['opportunity', id] as const) : ['opportunity', 'none'],

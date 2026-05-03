@@ -21,6 +21,7 @@ import {
   listHistory,
   moveOpportunity,
   reorderOpportunity,
+  searchOpportunities,
   setDescription,
   setOpportunityCustomFields,
   setTags,
@@ -42,6 +43,16 @@ function send(reply: FastifyReply, e: unknown) {
 
 export const opportunitiesRoutes: FastifyPluginAsync = async (app) => {
   app.addHook('preHandler', authenticate);
+
+  // Busca cross-pipeline por título ou nome do contato (usado pelo DryRun
+  // do flow builder pra escolher uma oportunidade pra simular).
+  app.get('/search', async (req, reply) => {
+    const query = z
+      .object({ q: z.string().optional(), limit: z.coerce.number().int().positive().max(50).optional() })
+      .safeParse(req.query);
+    if (!query.success) return reply.code(400).send({ error: 'VALIDATION', issues: query.error.flatten() });
+    return reply.send(await searchOpportunities(req.user!, query.data.q ?? '', query.data.limit ?? 20));
+  });
 
   // CRUD principal montado em /opportunities
   app.get('/:id', async (req, reply) => {

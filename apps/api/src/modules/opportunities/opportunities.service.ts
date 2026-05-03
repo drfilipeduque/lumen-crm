@@ -199,6 +199,64 @@ export async function getBoard(
 }
 
 // ============================================================
+// SEARCH (cross-pipeline, by title or contact name)
+// ============================================================
+
+export type OpportunitySearchHit = {
+  id: string;
+  title: string;
+  contactName: string;
+  pipelineId: string;
+  pipelineName: string;
+  stageId: string;
+  stageName: string;
+};
+
+export async function searchOpportunities(
+  actor: Actor,
+  q: string,
+  limit = 20,
+): Promise<OpportunitySearchHit[]> {
+  const term = q.trim();
+  const where: Prisma.OpportunityWhereInput = {
+    AND: [
+      ownerScope(actor),
+      ...(term
+        ? [
+            {
+              OR: [
+                { title: { contains: term, mode: 'insensitive' as const } },
+                { contact: { name: { contains: term, mode: 'insensitive' as const } } },
+              ],
+            },
+          ]
+        : []),
+    ],
+  };
+  const rows = await prisma.opportunity.findMany({
+    where,
+    orderBy: { updatedAt: 'desc' },
+    take: Math.min(50, Math.max(1, limit)),
+    select: {
+      id: true,
+      title: true,
+      contact: { select: { name: true } },
+      pipeline: { select: { id: true, name: true } },
+      stage: { select: { id: true, name: true } },
+    },
+  });
+  return rows.map((r) => ({
+    id: r.id,
+    title: r.title,
+    contactName: r.contact.name,
+    pipelineId: r.pipeline.id,
+    pipelineName: r.pipeline.name,
+    stageId: r.stage.id,
+    stageName: r.stage.name,
+  }));
+}
+
+// ============================================================
 // GET DETAIL
 // ============================================================
 
