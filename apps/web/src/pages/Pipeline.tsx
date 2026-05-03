@@ -1471,7 +1471,11 @@ function OpportunityCard({
           }}
           onMouseDown={(e) => e.stopPropagation()}
         >
-          <QuickActionBtn icon="Chat" title="Mensagem" onClick={() => toast('Chat ainda não implementado', 'info')} />
+          <QuickActionBtn
+            icon="Chat"
+            title="Abrir conversa"
+            onClick={() => navigate(`/conversations?contactId=${card.contactId}`)}
+          />
           <QuickActionBtn icon="Bell" title="Lembrete" onClick={() => setReminderOpen(true)} />
           <QuickActionBtn icon="Bolt" title="Iniciar cadência" onClick={() => setCadenceOpen(true)} />
         </div>
