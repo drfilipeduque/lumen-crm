@@ -24,6 +24,15 @@ function send(reply: FastifyReply, e: unknown) {
   throw e;
 }
 
+// Junta os erros do Zod numa mensagem legível pra surfacear no frontend.
+function zodMessage(err: z.ZodError): string {
+  const flat = err.flatten();
+  const fields = Object.entries(flat.fieldErrors)
+    .flatMap(([k, msgs]) => (msgs ?? []).map((m) => `${k}: ${m}`));
+  const all = [...flat.formErrors, ...fields];
+  return all.join(' · ') || 'Dados inválidos';
+}
+
 const idParam = z.object({ id: z.string().min(1) });
 
 export const scheduledMessagesRoutes: FastifyPluginAsync = async (app) => {
@@ -31,7 +40,8 @@ export const scheduledMessagesRoutes: FastifyPluginAsync = async (app) => {
 
   app.post('/', async (req, reply) => {
     const body = createScheduledMessageSchema.safeParse(req.body);
-    if (!body.success) return reply.code(400).send({ error: 'VALIDATION', issues: body.error.flatten() });
+    if (!body.success)
+      return reply.code(400).send({ error: 'VALIDATION', message: zodMessage(body.error), issues: body.error.flatten() });
     try {
       return reply.code(201).send(await createScheduledMessage(req.user!, body.data));
     } catch (e) {
@@ -41,13 +51,15 @@ export const scheduledMessagesRoutes: FastifyPluginAsync = async (app) => {
 
   app.get('/', async (req, reply) => {
     const q = listScheduledMessagesSchema.safeParse(req.query);
-    if (!q.success) return reply.code(400).send({ error: 'VALIDATION', issues: q.error.flatten() });
+    if (!q.success)
+      return reply.code(400).send({ error: 'VALIDATION', message: zodMessage(q.error), issues: q.error.flatten() });
     return reply.send(await listScheduledMessages(q.data));
   });
 
   app.get('/:id', async (req, reply) => {
     const p = idParam.safeParse(req.params);
-    if (!p.success) return reply.code(400).send({ error: 'VALIDATION', issues: p.error.flatten() });
+    if (!p.success)
+      return reply.code(400).send({ error: 'VALIDATION', message: zodMessage(p.error), issues: p.error.flatten() });
     try {
       return reply.send(await getScheduledMessage(p.data.id));
     } catch (e) {
@@ -57,9 +69,11 @@ export const scheduledMessagesRoutes: FastifyPluginAsync = async (app) => {
 
   app.put('/:id', async (req, reply) => {
     const p = idParam.safeParse(req.params);
-    if (!p.success) return reply.code(400).send({ error: 'VALIDATION', issues: p.error.flatten() });
+    if (!p.success)
+      return reply.code(400).send({ error: 'VALIDATION', message: zodMessage(p.error), issues: p.error.flatten() });
     const body = updateScheduledMessageSchema.safeParse(req.body);
-    if (!body.success) return reply.code(400).send({ error: 'VALIDATION', issues: body.error.flatten() });
+    if (!body.success)
+      return reply.code(400).send({ error: 'VALIDATION', message: zodMessage(body.error), issues: body.error.flatten() });
     try {
       return reply.send(await updateScheduledMessage(req.user!, p.data.id, body.data));
     } catch (e) {
@@ -69,7 +83,8 @@ export const scheduledMessagesRoutes: FastifyPluginAsync = async (app) => {
 
   app.delete('/:id', async (req, reply) => {
     const p = idParam.safeParse(req.params);
-    if (!p.success) return reply.code(400).send({ error: 'VALIDATION', issues: p.error.flatten() });
+    if (!p.success)
+      return reply.code(400).send({ error: 'VALIDATION', message: zodMessage(p.error), issues: p.error.flatten() });
     try {
       return reply.send(await cancelScheduledMessage(req.user!, p.data.id));
     } catch (e) {
