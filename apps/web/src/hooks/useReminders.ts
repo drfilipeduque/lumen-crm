@@ -116,6 +116,17 @@ export function useCreateReminder() {
   });
 }
 
+// Invalida todas as queries de lembrete que dependem do estado mudar:
+// lista por oportunidade, histórico, lista global da página /reminders,
+// badge do sino e popover de notificações.
+function invalidateReminderQueries(qc: ReturnType<typeof useQueryClient>, opportunityId: string) {
+  qc.invalidateQueries({ queryKey: key(opportunityId) });
+  qc.invalidateQueries({ queryKey: ['opportunity-history', opportunityId] });
+  qc.invalidateQueries({ queryKey: ['reminders-global'] });
+  qc.invalidateQueries({ queryKey: ['reminders-pending-count'] });
+  qc.invalidateQueries({ queryKey: ['reminders-notifications'] });
+}
+
 export function useUpdateReminder() {
   const qc = useQueryClient();
   return useMutation({
@@ -132,10 +143,7 @@ export function useUpdateReminder() {
       completed?: boolean;
       snoozedUntil?: string | null;
     }) => (await api.put<Reminder>(`/reminders/${id}`, patch)).data,
-    onSuccess: (_, vars) => {
-      qc.invalidateQueries({ queryKey: key(vars.opportunityId) });
-      qc.invalidateQueries({ queryKey: ['opportunity-history', vars.opportunityId] });
-    },
+    onSuccess: (_, vars) => invalidateReminderQueries(qc, vars.opportunityId),
   });
 }
 
@@ -144,10 +152,7 @@ export function useCompleteReminder() {
   return useMutation({
     mutationFn: async ({ id, opportunityId: _opp }: { id: string; opportunityId: string }) =>
       (await api.post<Reminder>(`/reminders/${id}/complete`, {})).data,
-    onSuccess: (_, vars) => {
-      qc.invalidateQueries({ queryKey: key(vars.opportunityId) });
-      qc.invalidateQueries({ queryKey: ['opportunity-history', vars.opportunityId] });
-    },
+    onSuccess: (_, vars) => invalidateReminderQueries(qc, vars.opportunityId),
   });
 }
 
@@ -164,7 +169,7 @@ export function useSnoozeReminder() {
       until?: string;
       preset?: '1h' | '3h' | 'tomorrow' | 'next-week';
     }) => (await api.post<Reminder>(`/reminders/${id}/snooze`, payload)).data,
-    onSuccess: (_, vars) => qc.invalidateQueries({ queryKey: key(vars.opportunityId) }),
+    onSuccess: (_, vars) => invalidateReminderQueries(qc, vars.opportunityId),
   });
 }
 
@@ -173,6 +178,6 @@ export function useDeleteReminder() {
   return useMutation({
     mutationFn: async ({ id, opportunityId: _opp }: { id: string; opportunityId: string }) =>
       (await api.delete(`/reminders/${id}`)).data,
-    onSuccess: (_, vars) => qc.invalidateQueries({ queryKey: key(vars.opportunityId) }),
+    onSuccess: (_, vars) => invalidateReminderQueries(qc, vars.opportunityId),
   });
 }
