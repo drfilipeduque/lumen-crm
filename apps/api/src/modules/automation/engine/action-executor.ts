@@ -25,6 +25,17 @@ export type ActionResult =
 
 type ActionConfig = Record<string, unknown>;
 
+// Heurística simples por extensão pra inferir o tipo de mídia quando o
+// usuário cola uma URL externa sem escolher tipo.
+function inferTypeFromUrl(url: string): 'IMAGE' | 'AUDIO' | 'VIDEO' | 'DOCUMENT' {
+  const ext = url.split('?')[0]!.split('.').pop()?.toLowerCase() ?? '';
+  if (['jpg', 'jpeg', 'png', 'webp', 'gif'].includes(ext)) return 'IMAGE';
+  if (['mp3', 'm4a', 'ogg', 'wav', 'webm'].includes(ext)) return 'AUDIO';
+  if (['mp4', 'mov', 'webm'].includes(ext)) return 'VIDEO';
+  if (['pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'txt', 'csv'].includes(ext)) return 'DOCUMENT';
+  return 'IMAGE';
+}
+
 // Renderiza recursivamente {{...}} em strings dentro do config.
 function renderConfig<T>(config: T, ctx: ExecutionContext): T {
   if (typeof config === 'string') return renderTemplate(config, ctx as unknown as Record<string, unknown>) as unknown as T;
@@ -64,6 +75,7 @@ export async function executeAction(
       const text = cfg.text as string | undefined;
       const scriptId = cfg.scriptId as string | undefined;
       const mediaUrl = cfg.mediaUrl as string | undefined;
+      const mediaTypeCfg = cfg.mediaType as 'IMAGE' | 'AUDIO' | 'VIDEO' | 'DOCUMENT' | undefined;
       let body = text ?? '';
       if (scriptId) {
         const s = await prisma.script.findUnique({ where: { id: scriptId } });
@@ -93,7 +105,7 @@ export async function executeAction(
       for (const cand of ordered) {
         try {
           const sent = await sendMessageToConversation(SYSTEM_ACTOR, cand.conversationId, {
-            type: mediaUrl ? 'IMAGE' : 'TEXT',
+            type: mediaUrl ? (mediaTypeCfg ?? inferTypeFromUrl(mediaUrl)) : 'TEXT',
             content: body || null,
             mediaUrl: mediaUrl ?? null,
           });

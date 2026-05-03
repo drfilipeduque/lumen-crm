@@ -1,9 +1,12 @@
 // Form especializado pra ação send_whatsapp_message no construtor.
-// Estrutura em 3 seções: Conteúdo, Conexão, Fallback.
+// Estrutura em 2 seções: Conteúdo, Conexão.
 
+import { useRef, useState } from 'react';
+import axios from 'axios';
 import { useTheme } from '../../../lib/ThemeContext';
 import { useWhatsAppConnections } from '../../../hooks/useWhatsApp';
-import { useTemplates } from '../../../hooks/useTemplates';
+import { useUploadAutomationMedia } from '../../../hooks/useAutomations';
+import { toast } from '../../../components/ui/Toast';
 import { VariablePicker } from './VariablePicker';
 
 export function SendWhatsAppActionForm({
@@ -20,18 +23,7 @@ export function SendWhatsAppActionForm({
   const { tokens: t } = useTheme();
   const connections = useWhatsAppConnections();
   const strategy = (config.connectionStrategy as string | undefined) ?? 'DEFAULT';
-  const fallback = (config.fallback as Record<string, unknown> | undefined) ?? {};
   const setField = (k: string, v: unknown) => onChange({ ...config, [k]: v });
-  const setFallback = (k: string, v: unknown) => onChange({ ...config, fallback: { ...fallback, [k]: v } });
-
-  const fallbackEnabled = Boolean(fallback.enabled);
-  const useTemplate = Boolean(fallback.useTemplateIfWindowClosed);
-  const fallbackToOther = Boolean(fallback.fallbackToOtherConnection);
-  const officialConn =
-    (config.connectionId as string | undefined) ||
-    (connections.data ?? []).find((c) => c.type === 'OFFICIAL')?.id ||
-    null;
-  const templates = useTemplates(officialConn);
 
   // Preview do caminho
   const path: string[] = [];
@@ -42,13 +34,6 @@ export function SendWhatsAppActionForm({
     path.push(`Tenta: tipo ${(config.preferredType as string) ?? 'OFFICIAL'} primeiro`);
   } else {
     path.push('Tenta: conexão padrão (do responsável ou config global)');
-  }
-  if (fallbackEnabled && useTemplate && fallback.fallbackTemplateId) {
-    const tmpl = templates.data?.find((x) => x.id === fallback.fallbackTemplateId);
-    path.push(`Se janela 24h fechada → template "${tmpl?.name ?? fallback.fallbackTemplateId}"`);
-  }
-  if (fallbackEnabled && fallbackToOther) {
-    path.push('Se ainda falhar → próxima conexão ativa');
   }
 
   return (
@@ -81,12 +66,16 @@ export function SendWhatsAppActionForm({
             style={input(t)}
           />
         </Field>
-        <Field label="URL de mídia (opcional)">
-          <input
-            type="text"
+        <Field label="Mídia (opcional)">
+          <MediaInput
             value={(config.mediaUrl as string) ?? ''}
-            onChange={(e) => setField('mediaUrl', e.target.value || undefined)}
-            style={input(t)}
+            mediaType={(config.mediaType as MediaType | undefined) ?? null}
+            onChange={(url, type) => {
+              const next: Record<string, unknown> = { ...config, mediaUrl: url || undefined };
+              if (type) next.mediaType = type;
+              else delete next.mediaType;
+              onChange(next);
+            }}
           />
         </Field>
       </Group>
@@ -133,46 +122,6 @@ export function SendWhatsAppActionForm({
         )}
       </Group>
 
-      <Group label="Fallback">
-        <Toggle
-          label="Ativar fallback se falhar"
-          checked={fallbackEnabled}
-          onChange={(v) => setFallback('enabled', v)}
-        />
-        {fallbackEnabled && (
-          <>
-            <Toggle
-              label="Usar template se janela 24h fechada (Meta)"
-              checked={useTemplate}
-              onChange={(v) => setFallback('useTemplateIfWindowClosed', v)}
-            />
-            {useTemplate && (
-              <Field label="Template de fallback">
-                <select
-                  value={(fallback.fallbackTemplateId as string) ?? ''}
-                  onChange={(e) => setFallback('fallbackTemplateId', e.target.value)}
-                  style={input(t)}
-                >
-                  <option value="">— escolha —</option>
-                  {(templates.data ?? [])
-                    .filter((tt) => tt.status === 'APPROVED')
-                    .map((tt) => (
-                      <option key={tt.id} value={tt.id}>
-                        {tt.name} ({tt.language})
-                      </option>
-                    ))}
-                </select>
-              </Field>
-            )}
-            <Toggle
-              label="Tentar outra conexão se a primeira falhar"
-              checked={fallbackToOther}
-              onChange={(v) => setFallback('fallbackToOtherConnection', v)}
-            />
-          </>
-        )}
-      </Group>
-
       <div
         style={{
           padding: 10,
@@ -193,6 +142,158 @@ export function SendWhatsAppActionForm({
         </ol>
       </div>
     </div>
+  );
+}
+
+type MediaType = 'IMAGE' | 'AUDIO' | 'VIDEO' | 'DOCUMENT';
+
+function MediaInput({
+  value,
+  mediaType,
+  onChange,
+}: {
+  value: string;
+  mediaType: MediaType | null;
+  onChange: (url: string, type: MediaType | null) => void;
+}) {
+  const { tokens: t } = useTheme();
+  const upload = useUploadAutomationMedia();
+  const fileRef = useRef<HTMLInputElement>(null);
+  const isUploaded = value.startsWith('/uploads/');
+  const [mode, setMode] = useState<'url' | 'upload'>(isUploaded ? 'upload' : 'url');
+
+  const pickFile = () => fileRef.current?.click();
+
+  const onFile = async (file: File | null) => {
+    if (!file) return;
+    try {
+      const r = await upload.mutateAsync(file);
+      onChange(r.url, r.type);
+      toast('Mídia enviada', 'success');
+    } catch (e) {
+      const msg = axios.isAxiosError(e) ? e.response?.data?.message : null;
+      toast(msg || 'Falha no upload', 'error');
+    }
+  };
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <div style={{ display: 'flex', gap: 4 }}>
+        <Tab t={t} active={mode === 'url'} onClick={() => setMode('url')}>URL</Tab>
+        <Tab t={t} active={mode === 'upload'} onClick={() => setMode('upload')}>Upload</Tab>
+      </div>
+
+      {mode === 'url' ? (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <input
+            type="text"
+            value={value}
+            onChange={(e) => onChange(e.target.value, mediaType)}
+            placeholder="https://…"
+            style={input(t)}
+          />
+          <select
+            value={mediaType ?? ''}
+            onChange={(e) => onChange(value, (e.target.value || null) as MediaType | null)}
+            style={input(t)}
+          >
+            <option value="">Tipo (auto: imagem se vazio)</option>
+            <option value="IMAGE">Imagem</option>
+            <option value="VIDEO">Vídeo</option>
+            <option value="AUDIO">Áudio</option>
+            <option value="DOCUMENT">Documento</option>
+          </select>
+        </div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <input
+            ref={fileRef}
+            type="file"
+            style={{ display: 'none' }}
+            accept="image/*,audio/*,video/*,application/pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv"
+            onChange={(e) => {
+              onFile(e.target.files?.[0] ?? null);
+              if (e.target) e.target.value = '';
+            }}
+          />
+          {isUploaded ? (
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                padding: '7px 10px',
+                background: t.bgInput,
+                border: `1px solid ${t.border}`,
+                borderRadius: 7,
+                fontSize: 11.5,
+                color: t.text,
+                gap: 8,
+              }}
+            >
+              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
+                {value.split('/').pop()}
+              </span>
+              <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+                <button type="button" onClick={pickFile} style={btnGhost(t)} disabled={upload.isPending}>
+                  Trocar
+                </button>
+                <button type="button" onClick={() => onChange('', null)} style={btnGhost(t)}>
+                  Remover
+                </button>
+              </div>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={pickFile}
+              disabled={upload.isPending}
+              style={{
+                ...input(t),
+                cursor: 'pointer',
+                textAlign: 'center',
+                padding: '12px 10px',
+                borderStyle: 'dashed',
+                color: t.textDim,
+              }}
+            >
+              {upload.isPending ? 'Enviando…' : 'Selecionar arquivo (até 20MB)'}
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function Tab({
+  t,
+  active,
+  onClick,
+  children,
+}: {
+  t: ReturnType<typeof useTheme>['tokens'];
+  active: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      style={{
+        padding: '4px 10px',
+        borderRadius: 6,
+        border: `1px solid ${active ? t.gold : t.border}`,
+        background: active ? t.goldFaint : 'transparent',
+        color: active ? t.text : t.textDim,
+        fontSize: 11,
+        fontWeight: 600,
+        cursor: 'pointer',
+      }}
+    >
+      {children}
+    </button>
   );
 }
 
@@ -229,16 +330,6 @@ function Field({ label, action, children }: { label: string; action?: React.Reac
   );
 }
 
-function Toggle({ label, checked, onChange }: { label: string; checked: boolean; onChange: (v: boolean) => void }) {
-  const { tokens: t } = useTheme();
-  return (
-    <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 12, color: t.text }}>
-      <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} style={{ accentColor: t.gold }} />
-      {label}
-    </label>
-  );
-}
-
 type Tk = ReturnType<typeof useTheme>['tokens'];
 const input = (t: Tk) => ({
   width: '100%',
@@ -250,4 +341,13 @@ const input = (t: Tk) => ({
   fontSize: 12.5,
   outline: 'none' as const,
   fontFamily: 'inherit',
+});
+const btnGhost = (t: Tk) => ({
+  padding: '4px 9px',
+  borderRadius: 5,
+  background: 'transparent',
+  color: t.text,
+  border: `1px solid ${t.border}`,
+  fontSize: 10.5,
+  cursor: 'pointer' as const,
 });
